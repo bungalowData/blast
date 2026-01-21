@@ -55,7 +55,7 @@
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script>
         // Connexion au serveur WebSocket
-        const socket = io('http://https://blast-mg48.onrender.com:3000');
+        const socket = io('http://https://blast-mg48.onrender.com');
 
         // Écoutez l'événement pour afficher le sondage
         socket.on('afficher_sondage', () => {
@@ -65,7 +65,7 @@
 
         // Fonction pour voter
         function voter(option) {
-            fetch('http://https://blast-mg48.onrender.com:3000/vote', {
+            fetch('http://https://blast-mg48.onrender.com/vote', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
