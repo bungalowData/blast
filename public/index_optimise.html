@@ -12,11 +12,13 @@
             overflow-y: auto;
             padding-bottom: env(safe-area-inset-bottom, 200px);
             background-color: #36393F;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Police moderne */
         }
         #iframe-container {
             width: 100%;
             height: calc(100vh - env(safe-area-inset-bottom, 200px));
             overflow: hidden;
+            margin-top: -100px;
         }
         #iframe-container iframe {
             margin-top: -50px;
@@ -29,22 +31,46 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background-color: white;
+            background-color: #2F3136; /* Couleur proche de #36393F pour le contraste */
             padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
             z-index: 1000;
             display: none;
             max-width: 90%;
+            width: 300px;
+            color: #DCDDDE; /* Couleur du texte pour un bon contraste */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         #sondage-container h2 {
             margin-top: 0;
+            color: #FFFFFF; /* Blanc pour le titre */
+            font-size: 18px;
+            text-align: center;
+        }
+        #sondage-container p {
+            color: #B9BBBE; /* Gris clair pour le texte */
+            text-align: center;
         }
         #sondage-container button {
-            margin: 5px;
+            margin: 8px;
             padding: 10px 15px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 14px;
+            background-color: #5865F2; /* Bleu Discord */
+            color: white;
+            border: none;
+            border-radius: 4px;
+            width: calc(100% - 24px);
+            transition: background-color 0.2s;
+        }
+        #sondage-container button:hover {
+            background-color: #4752C4; /* Bleu plus foncé au survol */
+        }
+        #merci-message {
+            color: #00D26A; /* Vert pour le message de remerciement */
+            text-align: center;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -59,14 +85,14 @@
         <button onclick="voter('Option 1')">Option 1</button>
         <button onclick="voter('Option 2')">Option 2</button>
         <button onclick="voter('Option 3')">Option 3</button>
-        <p id="merci-message" style="display: none; color: green;">Merci pour votre vote !</p>
+        <p id="merci-message" style="display: none;">Merci pour votre vote !</p>
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script>
         // Fonction pour défiler vers le bas
         function scrollToBottom() {
-            window.scrollTo(0, document.body.scrollHeight + 200);
+            window.scrollTo(0, document.body.scrollHeight);
         }
 
         // Défile vers le bas au chargement de la page
