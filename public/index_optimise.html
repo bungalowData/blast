@@ -51,11 +51,7 @@
         window.addEventListener('resize', function() {
             const iframe = document.querySelector('#iframe-container iframe');
             iframe.style.height = window.innerHeight + 'px';
-            window.scrollTo({
-                top: document.documentElement.scrollHeight,
-                left: 0,
-                 behavior: 'smooth'
-            }); // Défile vers le bas
+            window.scrollTo(0, document.body.scrollHeight); // Défile vers le bas
         });
     </script>
 
