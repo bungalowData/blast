@@ -12,7 +12,7 @@
             overflow-y: auto;
             padding-bottom: env(safe-area-inset-bottom, 200px);
             background-color: #36393F;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Police moderne */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         #iframe-container {
             width: 100%;
@@ -21,7 +21,6 @@
             margin-top: -100px;
         }
         #iframe-container iframe {
-            margin-top: -50px;
             width: 100%;
             height: 100%;
             border: none;
@@ -31,7 +30,7 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background-color: #2F3136; /* Couleur proche de #36393F pour le contraste */
+            background-color: #2F3136;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
@@ -39,17 +38,16 @@
             display: none;
             max-width: 90%;
             width: 300px;
-            color: #DCDDDE; /* Couleur du texte pour un bon contraste */
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #DCDDDE;
         }
         #sondage-container h2 {
             margin-top: 0;
-            color: #FFFFFF; /* Blanc pour le titre */
+            color: #FFFFFF;
             font-size: 18px;
             text-align: center;
         }
         #sondage-container p {
-            color: #B9BBBE; /* Gris clair pour le texte */
+            color: #B9BBBE;
             text-align: center;
         }
         #sondage-container button {
@@ -57,7 +55,7 @@
             padding: 10px 15px;
             cursor: pointer;
             font-size: 14px;
-            background-color: #5865F2; /* Bleu Discord */
+            background-color: #5865F2;
             color: white;
             border: none;
             border-radius: 4px;
@@ -65,14 +63,27 @@
             transition: background-color 0.2s;
         }
         #sondage-container button:hover {
-            background-color: #4752C4; /* Bleu plus foncé au survol */
+            background-color: #4752C4;
         }
         #merci-message {
-            color: #00D26A; /* Vert pour le message de remerciement */
+            color: #00D26A;
             text-align: center;
             font-weight: bold;
         }
+        #options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
     </style>
+
+    <script>
+        window.addEventListener('resize', function() {
+            const iframe = document.querySelector('#discord-iframe');
+            iframe.style.height = window.innerHeight + 'px';
+            window.scrollTo(0, document.body.scrollHeight);
+        });
+    </script>
 </head>
 <body>
     <div id="iframe-container">
@@ -80,16 +91,17 @@
     </div>
 
     <div id="sondage-container">
-        <h2>Sondage</h2>
+        <h2 id="sondage-question">Sondage</h2>
         <p>Quelle est votre option préférée ?</p>
-        <button onclick="voter('Option 1')">Option 1</button>
-        <button onclick="voter('Option 2')">Option 2</button>
-        <button onclick="voter('Option 3')">Option 3</button>
+        <div id="options-container">
+            <!-- Les boutons pour les options seront ajoutés dynamiquement ici -->
+        </div>
         <p id="merci-message" style="display: none;">Merci pour votre vote !</p>
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script>
+
         // Fonction pour défiler vers le bas
         function scrollToBottom() {
             window.scrollTo(0, document.body.scrollHeight);
@@ -109,11 +121,30 @@
         document.querySelector('#discord-iframe').addEventListener('load', function() {
             this.contentWindow.document.addEventListener('focusin', scrollToBottom);
         });
-
+        
         const socket = io('https://blast-mg48.onrender.com');
 
-        socket.on('afficher_sondage', () => {
-            document.getElementById('sondage-container').style.display = 'block';
+        socket.on('afficher_sondage', (poll) => {
+            const container = document.getElementById('sondage-container');
+            const questionElement = document.getElementById('sondage-question');
+            const optionsContainer = document.getElementById('options-container');
+
+            // Mettre à jour la question du sondage
+            questionElement.textContent = poll.question;
+
+            // Effacer les anciennes options
+            optionsContainer.innerHTML = '';
+
+            // Ajouter les nouvelles options
+            poll.reponses.forEach((option, index) => {
+                const button = document.createElement('button');
+                button.textContent = option;
+                button.onclick = () => voter(option);
+                optionsContainer.appendChild(button);
+            });
+
+            // Afficher le sondage
+            container.style.display = 'block';
         });
 
         function voter(option) {
