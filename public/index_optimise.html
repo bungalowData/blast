@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sondage Interactif</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+        #iframe-container {
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #iframe-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        #sondage-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: none;
+            max-width: 90%;
+        }
+        #sondage-container h2 {
+            margin-top: 0;
+        }
+        #sondage-container button {
+            margin: 5px;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div id="iframe-container">
+        <iframe src="./discFrame_optimise.html" frameborder="0" scrolling="no"></iframe>
+    </div>
+
+    <div id="sondage-container">
+        <h2>Sondage</h2>
+        <p>Quelle est votre option préférée ?</p>
+        <button onclick="voter('Option 1')">Option 1</button>
+        <button onclick="voter('Option 2')">Option 2</button>
+        <button onclick="voter('Option 3')">Option 3</button>
+        <p id="merci-message" style="display: none; color: green;">Merci pour votre vote !</p>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        const socket = io('https://blast-mg48.onrender.com');
+
+        socket.on('afficher_sondage', () => {
+            document.getElementById('sondage-container').style.display = 'block';
+        });
+
+        function voter(option) {
+            fetch('https://blast-mg48.onrender.com/vote', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ option: option }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('merci-message').style.display = 'block';
+                setTimeout(() => {
+                    document.getElementById('sondage-container').style.display = 'none';
+                    document.getElementById('merci-message').style.display = 'none';
+                }, 2000);
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+            });
+        }
+    </script>
+</body>
+</html>
