@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BLAST</title>
+    <title>Sondage Interactif</title>
     <style>
         body, html {
             margin: 0;
             padding: 0;
             height: 100%;
-            overflow-y: auto; /* Permet le défilement vertical */
+            overflow-y: auto;
             padding-bottom: env(safe-area-inset-bottom, 200px);
-            background-color: #36393F; 
+            background-color: #36393F;
         }
         #iframe-container {
             width: 100%;
@@ -46,15 +46,6 @@
             font-size: 16px;
         }
     </style>
-
-    <script>
-        window.addEventListener('resize', function() {
-            const iframe = document.querySelector('#iframe-container iframe');
-            iframe.style.height = window.innerHeight + 'px';
-            window.scrollTo(0, document.body.scrollHeight + 50); // Défile vers le bas
-        });
-    </script>
-
 </head>
 <body>
     <div id="iframe-container">
@@ -72,6 +63,26 @@
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script>
+        // Fonction pour défiler vers le bas
+        function scrollToBottom() {
+            window.scrollTo(0, document.body.scrollHeight);
+        }
+
+        // Défile vers le bas au chargement de la page
+        window.addEventListener('load', scrollToBottom);
+
+        // Défile vers le bas lorsque la fenêtre est redimensionnée (clavier apparaît)
+        window.addEventListener('resize', function() {
+            const iframe = document.querySelector('#discord-iframe');
+            iframe.style.height = window.innerHeight + 'px';
+            scrollToBottom();
+        });
+
+        // Défile vers le bas lorsqu'un élément dans l'iframe reçoit le focus (champ de saisie)
+        document.querySelector('#discord-iframe').addEventListener('load', function() {
+            this.contentWindow.document.addEventListener('focusin', scrollToBottom);
+        });
+
         const socket = io('https://blast-mg48.onrender.com');
 
         socket.on('afficher_sondage', () => {
