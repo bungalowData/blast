@@ -9,7 +9,7 @@
             margin: 0;
             padding: 0;
             height: 100%;
-            overflow: hidden;
+            overflow-y: auto; /* Permet le défilement vertical */
             padding-bottom: env(safe-area-inset-bottom, 200px);
         }
         #iframe-container {
@@ -50,13 +50,14 @@
         window.addEventListener('resize', function() {
             const iframe = document.querySelector('#iframe-container iframe');
             iframe.style.height = window.innerHeight + 'px';
+            window.scrollTo(0, document.body.scrollHeight); // Défile vers le bas
         });
     </script>
 
 </head>
 <body>
     <div id="iframe-container">
-        <iframe src="./discFrame_optimise.html" frameborder="0" scrolling="no"></iframe>
+        <iframe src="./discFrame_optimise.html" frameborder="0" scrolling="no" id="discord-iframe"></iframe>
     </div>
 
     <div id="sondage-container">
