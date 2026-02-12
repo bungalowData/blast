@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Résultats du Sondage en Direct</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #36393F;
+            color: #DCDDDE;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #2F3136;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        h1 {
+            text-align: center;
+            color: #FFFFFF;
+        }
+        #sondage-question {
+            text-align: center;
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #FFFFFF;
+        }
+        .result-item {
+            margin-bottom: 15px;
+            background-color: #202225;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .option-name {
+            font-weight: bold;
+            color: #B9BBBE;
+        }
+        .option-bar-container {
+            background-color: #1E1F22;
+            border-radius: 4px;
+            margin-top: 5px;
+            height: 20px;
+            overflow: hidden;
+        }
+        .option-bar {
+            height: 100%;
+            background-color: #5865F2;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+        .option-votes {
+            text-align: right;
+            color: #B9BBBE;
+            font-size: 14px;
+        }
+        .refresh-button {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin-top: 20px;
+            background-color: #5865F2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .refresh-button:hover {
+            background-color: #4752C4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Résultats en Direct</h1>
+        <div id="sondage-question">Chargement de la question...</div>
+        <div id="results-container">
+            <!-- Les résultats seront affichés ici -->
+        </div>
+        <button class="refresh-button" onclick="fetchResults()">Rafraîchir les Résultats</button>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        const socket = io('https://blast-mg48.onrender.com');
+        let currentPoll = { question: '', reponses: [] };
+
+        // Fonction pour récupérer et afficher les résultats
+        function fetchResults() {
+            fetch('https://blast-mg48.onrender.com/results')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('results-container');
+                    const questionElement = document.getElementById('sondage-question');
+
+                    // Mettre à jour la question
+                    questionElement.textContent = currentPoll.question;
+
+                    // Effacer les anciens résultats
+                    container.innerHTML = '';
+
+                    // Calculer le total des votes
+                    const totalVotes = Object.values(data).reduce((sum, votes) => sum + votes, 0);
+
+                    // Afficher les résultats
+                    currentPoll.reponses.forEach(reponse => {
+                        const votes = data[reponse] || 0;
+                        const percentage = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
+
+                        const resultItem = document.createElement('div');
+                        resultItem.className = 'result-item';
+
+                        const optionName = document.createElement('div');
+                        optionName.className = 'option-name';
+                        optionName.textContent = reponse;
+
+                        const optionBarContainer = document.createElement('div');
+                        optionBarContainer.className = 'option-bar-container';
+
+                        const optionBar = document.createElement('div');
+                        optionBar.className = 'option-bar';
+                        optionBar.style.width = `${percentage}%`;
+
+                        const optionVotes = document.createElement('div');
+                        optionVotes.className = 'option-votes';
+                        optionVotes.textContent = `${votes} votes`;
+
+                        optionBarContainer.appendChild(optionBar);
+                        resultItem.appendChild(optionName);
+                        resultItem.appendChild(optionBarContainer);
+                        resultItem.appendChild(optionVotes);
+
+                        container.appendChild(resultItem);
+                    });
+                })
+                .catch(error => {
+                    console.error('Erreur:', error);
+                });
+        }
+
+        // Écouter les mises à jour du sondage
+        socket.on('afficher_sondage', (poll) => {
+            currentPoll = poll;
+            fetchResults();
+        });
+
+        // Rafraîchir les résultats au chargement de la page
+        fetchResults();
+
+        // Rafraîchir les résultats toutes les 5 secondes
+        setInterval(fetchResults, 5000);
+    </script>
+</body>
+</html>
