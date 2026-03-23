@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -16,6 +18,33 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
+
+// ─────────────────────────────────────────
+//  TEMPLATES DE SONDAGES
+// ─────────────────────────────────────────
+const TEMPLATES_FILE = path.join(__dirname, 'poll-templates.json');
+
+function loadTemplates() {
+    try {
+        if (!fs.existsSync(TEMPLATES_FILE)) {
+            fs.writeFileSync(TEMPLATES_FILE, '[]', 'utf8');
+        }
+        return JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
+    } catch (e) {
+        console.error('Erreur lecture templates:', e);
+        return [];
+    }
+}
+
+function saveTemplates(templates) {
+    try {
+        fs.writeFileSync(TEMPLATES_FILE, JSON.stringify(templates, null, 2), 'utf8');
+        return true;
+    } catch (e) {
+        console.error('Erreur écriture templates:', e);
+        return false;
+    }
+}
 
 // ─────────────────────────────────────────
 //  SONDAGE  (existant, inchangé)
@@ -194,6 +223,83 @@ app.post('/admin/stats', (req, res) => {
         voteCount: votes.length,
         currentPoll: currentPoll,
     });
+});
+
+// ─────────────────────────────────────────
+//  ADMIN — TEMPLATES DE SONDAGES
+// ─────────────────────────────────────────
+
+// Lister tous les templates
+app.post('/admin/poll-templates', (req, res) => {
+    const { password } = req.body;
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).send({ error: 'Mot de passe incorrect.' });
+    }
+    const templates = loadTemplates();
+    res.send({ success: true, templates });
+});
+
+// Ajouter un nouveau template
+app.post('/admin/poll-templates/add', (req, res) => {
+    const { password, question, reponses } = req.body;
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).send({ error: 'Mot de passe incorrect.' });
+    }
+    if (!question || !Array.isArray(reponses) || reponses.length < 2) {
+        return res.status(400).send({ error: 'Question et au moins 2 réponses requises.' });
+    }
+
+    const templates = loadTemplates();
+
+    // Vérifier qu'un template identique n'existe pas déjà
+    const duplicate = templates.some(t =>
+        t.question.toLowerCase() === question.trim().toLowerCase()
+    );
+    if (duplicate) {
+        return res.status(409).send({ error: 'Un template avec cette question existe déjà.' });
+    }
+
+    const newTemplate = {
+        id: Date.now().toString(),
+        question: question.trim().slice(0, 200),
+        reponses: reponses.map(r => String(r).trim().slice(0, 100)).filter(Boolean),
+        createdAt: new Date().toISOString()
+    };
+
+    templates.push(newTemplate);
+
+    if (!saveTemplates(templates)) {
+        return res.status(500).send({ error: 'Erreur lors de la sauvegarde.' });
+    }
+
+    console.log(`Nouveau template créé : "${newTemplate.question}"`);
+    res.send({ success: true, template: newTemplate });
+});
+
+// Supprimer un template
+app.post('/admin/poll-templates/delete', (req, res) => {
+    const { password, id } = req.body;
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).send({ error: 'Mot de passe incorrect.' });
+    }
+    if (!id) {
+        return res.status(400).send({ error: 'ID du template requis.' });
+    }
+
+    let templates = loadTemplates();
+    const before = templates.length;
+    templates = templates.filter(t => t.id !== id);
+
+    if (templates.length === before) {
+        return res.status(404).send({ error: 'Template introuvable.' });
+    }
+
+    if (!saveTemplates(templates)) {
+        return res.status(500).send({ error: 'Erreur lors de la sauvegarde.' });
+    }
+
+    console.log(`Template supprimé : ${id}`);
+    res.send({ success: true });
 });
 
 // ─────────────────────────────────────────

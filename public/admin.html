@@ -115,6 +115,11 @@
         .btn-danger:hover { background: var(--red-hover); }
         .btn-success { background: var(--green); color: white; }
         .btn-success:hover { background: #1a8a4a; }
+        .btn-outline {
+            background: none; border: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+        .btn-outline:hover { border-color: var(--accent); color: var(--accent); background: none; }
 
         .btn-sm {
             padding: 7px 14px; font-size: 13px; font-weight: 600;
@@ -215,6 +220,149 @@
         #toast.error   { border-color: var(--red);   color: var(--red); }
         #toast.info    { border-color: var(--accent); color: var(--accent); }
         #toast.show    { transform: translateX(-50%) translateY(0); }
+
+        /* ══════════════════════════════════════
+           TEMPLATES DE SONDAGES
+        ══════════════════════════════════════ */
+        .templates-section {
+            margin-bottom: 20px;
+        }
+
+        .templates-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .templates-toggle {
+            background: none; border: none;
+            color: var(--text-muted); cursor: pointer;
+            font-size: 12px; font-family: var(--font);
+            display: flex; align-items: center; gap: 4px;
+            padding: 0; transition: color 0.15s;
+        }
+        .templates-toggle:hover { color: var(--text); }
+        .templates-toggle .chevron {
+            display: inline-block;
+            transition: transform 0.2s;
+            font-style: normal;
+        }
+        .templates-toggle.open .chevron { transform: rotate(180deg); }
+
+        .templates-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .templates-list.open {
+            max-height: 600px;
+        }
+
+        .template-card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+            position: relative;
+        }
+        .template-card:hover {
+            border-color: var(--accent);
+            background: rgba(88, 101, 242, 0.06);
+        }
+        .template-card:hover .template-load-hint {
+            opacity: 1;
+        }
+
+        .template-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+            width: 28px;
+            text-align: center;
+        }
+
+        .template-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .template-question {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 2px;
+        }
+        .template-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .template-load-hint {
+            font-size: 11px;
+            color: var(--accent);
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.15s;
+            flex-shrink: 0;
+        }
+
+        .template-delete-btn {
+            background: none; border: none;
+            color: var(--text-muted); cursor: pointer;
+            font-size: 16px; padding: 2px 5px;
+            border-radius: 4px; line-height: 1;
+            flex-shrink: 0;
+            transition: color 0.15s, background 0.15s;
+            z-index: 1;
+        }
+        .template-delete-btn:hover {
+            color: var(--red);
+            background: rgba(242, 63, 67, 0.1);
+        }
+
+        .templates-empty {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+            padding: 16px 0 8px;
+            font-style: italic;
+        }
+
+        .divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 18px 0;
+        }
+
+        /* Bouton sauvegarder template */
+        .btn-save-template {
+            width: 100%;
+            padding: 9px;
+            border: 1px dashed var(--border);
+            border-radius: var(--radius);
+            background: none;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 600;
+            font-family: var(--font);
+            cursor: pointer;
+            margin-bottom: 10px;
+            transition: border-color 0.15s, color 0.15s;
+        }
+        .btn-save-template:hover {
+            border-color: var(--green);
+            color: var(--green);
+        }
     </style>
 </head>
 <body>
@@ -276,6 +424,24 @@
 
             <!-- ── Sondage ── -->
             <div id="tab-sondage" class="tab-panel">
+
+                <!-- ── Templates ── -->
+                <div class="templates-section">
+                    <div class="templates-header">
+                        <div class="section-title" style="margin-bottom:0">📋 Templates</div>
+                        <button class="templates-toggle" id="templates-toggle">
+                            <span id="templates-count">0 template</span>
+                            <i class="chevron">▾</i>
+                        </button>
+                    </div>
+                    <div class="templates-list" id="templates-list">
+                        <div class="templates-empty" id="templates-empty">Aucun template sauvegardé.</div>
+                    </div>
+                </div>
+
+                <hr class="divider">
+
+                <!-- ── Formulaire ── -->
                 <div class="section-title">Question</div>
                 <input id="poll-question" class="field-input" type="text"
                     placeholder="Ex : Quel est votre sport préféré ?" maxlength="200" />
@@ -292,6 +458,9 @@
                     </div>
                 </div>
                 <button class="add-response-btn" id="add-response-btn">+ Ajouter une réponse</button>
+
+                <!-- ── Actions ── -->
+                <button class="btn-save-template" id="save-template-btn">💾 Sauvegarder comme template</button>
                 <button class="btn btn-success" id="launch-poll-btn">🚀 Lancer le sondage</button>
             </div>
 
@@ -365,6 +534,7 @@
         document.getElementById('login-section').style.display = 'none';
         document.getElementById('dashboard-section').style.display = 'block';
         fetchStats();
+        fetchTemplates();
         resultsInterval = setInterval(() => {
             if (currentPoll.reponses.length > 0) fetchResults();
         }, 5000);
@@ -543,6 +713,176 @@
                 container.appendChild(item);
             });
         } catch (e) {}
+    }
+
+    // ══════════════════════════════════════
+    //  TEMPLATES DE SONDAGES
+    // ══════════════════════════════════════
+
+    let templates = [];
+
+    // ── Toggle section templates ──
+    const toggleBtn = document.getElementById('templates-toggle');
+    const templatesList = document.getElementById('templates-list');
+
+    toggleBtn.addEventListener('click', () => {
+        const isOpen = templatesList.classList.toggle('open');
+        toggleBtn.classList.toggle('open', isOpen);
+    });
+
+    // ── Charger les templates ──
+    async function fetchTemplates() {
+        try {
+            const res = await fetch(`${SERVER}/admin/poll-templates`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: adminPassword }),
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            templates = data.templates || [];
+            renderTemplates();
+        } catch (e) {
+            console.warn('Erreur chargement templates:', e);
+        }
+    }
+
+    // ── Afficher les templates ──
+    function renderTemplates() {
+        const list = document.getElementById('templates-list');
+        const empty = document.getElementById('templates-empty');
+        const countEl = document.getElementById('templates-count');
+
+        // Mettre à jour le compteur
+        const n = templates.length;
+        countEl.textContent = n === 0 ? '0 template' : `${n} template${n > 1 ? 's' : ''}`;
+
+        // Retirer les anciennes cartes (garder l'élément "empty")
+        list.querySelectorAll('.template-card').forEach(c => c.remove());
+
+        if (n === 0) {
+            empty.style.display = 'block';
+            return;
+        }
+
+        empty.style.display = 'none';
+
+        templates.forEach(tpl => {
+            const card = document.createElement('div');
+            card.className = 'template-card';
+            card.dataset.id = tpl.id;
+            card.innerHTML = `
+                <span class="template-icon">📋</span>
+                <div class="template-info">
+                    <div class="template-question" title="${escapeHtml(tpl.question)}">${escapeHtml(tpl.question)}</div>
+                    <div class="template-meta">${tpl.reponses.length} réponse${tpl.reponses.length > 1 ? 's' : ''}</div>
+                </div>
+                <span class="template-load-hint">Utiliser →</span>
+                <button class="template-delete-btn" data-id="${tpl.id}" title="Supprimer ce template">×</button>
+            `;
+
+            // Clic sur la carte → pré-remplir le formulaire
+            card.addEventListener('click', (e) => {
+                // Ne pas déclencher si on clique sur le bouton supprimer
+                if (e.target.classList.contains('template-delete-btn')) return;
+                loadTemplate(tpl);
+            });
+
+            // Clic sur le bouton supprimer
+            card.querySelector('.template-delete-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteTemplate(tpl.id);
+            });
+
+            list.appendChild(card);
+        });
+    }
+
+    // ── Pré-remplir le formulaire ──
+    function loadTemplate(tpl) {
+        // Remplir la question
+        document.getElementById('poll-question').value = tpl.question;
+
+        // Reconstruire les lignes de réponses
+        const responsesList = document.getElementById('responses-list');
+        responsesList.innerHTML = '';
+        responseCount = 0;
+
+        tpl.reponses.forEach((reponse, i) => {
+            responseCount++;
+            const row = document.createElement('div');
+            row.className = 'response-row';
+            row.innerHTML = `
+                <input class="field-input response-input" type="text"
+                    placeholder="Réponse ${responseCount}" maxlength="100"
+                    value="${escapeHtml(reponse)}" />
+                <button class="remove-btn" title="Supprimer">×</button>`;
+            bindRemoveBtn(row.querySelector('.remove-btn'));
+            responsesList.appendChild(row);
+        });
+
+        updateRemoveButtons();
+
+        // Fermer la liste des templates
+        templatesList.classList.remove('open');
+        toggleBtn.classList.remove('open');
+
+        showToast('📋 Template chargé !', 'info');
+        document.getElementById('poll-question').focus();
+    }
+
+    // ── Sauvegarder un template ──
+    document.getElementById('save-template-btn').addEventListener('click', async () => {
+        const question = document.getElementById('poll-question').value.trim();
+        const reponses = [...document.querySelectorAll('.response-input')]
+            .map(i => i.value.trim()).filter(Boolean);
+
+        if (!question) { showToast('Saisissez une question d\'abord.', 'error'); return; }
+        if (reponses.length < 2) { showToast('Au moins 2 réponses requises.', 'error'); return; }
+
+        try {
+            const res = await fetch(`${SERVER}/admin/poll-templates/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: adminPassword, question, reponses }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                templates.push(data.template);
+                renderTemplates();
+                // Ouvrir la liste pour montrer le nouveau template
+                templatesList.classList.add('open');
+                toggleBtn.classList.add('open');
+                showToast('✅ Template sauvegardé !');
+            } else if (res.status === 409) {
+                showToast('Un template avec cette question existe déjà.', 'info');
+            } else {
+                showToast(data.error || 'Erreur lors de la sauvegarde.', 'error');
+            }
+        } catch (e) {
+            showToast('Impossible de joindre le serveur.', 'error');
+        }
+    });
+
+    // ── Supprimer un template ──
+    async function deleteTemplate(id) {
+        try {
+            const res = await fetch(`${SERVER}/admin/poll-templates/delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: adminPassword, id }),
+            });
+            if (res.ok) {
+                templates = templates.filter(t => t.id !== id);
+                renderTemplates();
+                showToast('🗑️ Template supprimé.', 'info');
+            } else {
+                const data = await res.json();
+                showToast(data.error || 'Erreur.', 'error');
+            }
+        } catch (e) {
+            showToast('Impossible de joindre le serveur.', 'error');
+        }
     }
 </script>
 </body>
