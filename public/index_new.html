@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sondage Interactif</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background-color: #36393F;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        /* ── Iframe plein écran ── */
+        #iframe-container {
+            position: fixed;
+            inset: 0;
+        }
+        #iframe-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        /* ── Sondage overlay ── */
+        #sondage-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #2F3136;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            display: none;
+            max-width: 90%;
+            width: 300px;
+            color: #DCDDDE;
+            animation: popIn .2s ease;
+        }
+        @keyframes popIn {
+            from { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+            to   { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
+        }
+        #sondage-container .sondage-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: #5865F2;
+            text-align: center;
+            margin-bottom: 4px;
+        }
+        #sondage-container h2 {
+            margin-top: 0;
+            color: #FFFFFF;
+            font-size: 18px;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        #sondage-container button {
+            display: block;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 14px;
+            background-color: #5865F2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            width: 100%;
+            transition: background-color 0.2s, transform 0.1s;
+            font-family: inherit;
+        }
+        #sondage-container button:hover {
+            background-color: #4752C4;
+        }
+        #sondage-container button:active {
+            transform: scale(0.97);
+        }
+        #merci-message {
+            color: #00D26A;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+            padding: 8px 0;
+        }
+        #options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* Backdrop flouté derrière le sondage */
+        #sondage-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(2px);
+            z-index: 999;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Chat public -->
+    <div id="iframe-container">
+        <iframe src="./chat.html" id="chat-iframe"></iframe>
+    </div>
+
+    <!-- Backdrop sondage -->
+    <div id="sondage-backdrop"></div>
+
+    <!-- Sondage -->
+    <div id="sondage-container">
+        <div class="sondage-label">📊 Sondage</div>
+        <h2 id="sondage-question">Sondage</h2>
+        <div id="options-container">
+            <!-- Options générées dynamiquement -->
+        </div>
+        <p id="merci-message">✅ Merci pour votre vote !</p>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+
+        const socket = io('https://blast-mg48.onrender.com');
+
+        socket.on('connect', () => {
+            console.log('Socket connecté (sondage)');
+        });
+
+        socket.on('connect_error', (e) => {
+            console.warn('Erreur socket:', e);
+        });
+
+        // ── Réception d'un sondage ──
+        socket.on('afficher_sondage', (poll) => {
+            const container  = document.getElementById('sondage-container');
+            const backdrop   = document.getElementById('sondage-backdrop');
+            const questionEl = document.getElementById('sondage-question');
+            const optionsEl  = document.getElementById('options-container');
+            const merciEl    = document.getElementById('merci-message');
+
+            // Reset
+            merciEl.style.display = 'none';
+            questionEl.textContent = poll.question;
+            optionsEl.innerHTML = '';
+
+            // Créer les boutons
+            poll.reponses.forEach((option) => {
+                const btn = document.createElement('button');
+                btn.textContent = option;
+                btn.onclick = () => voter(option);
+                optionsEl.appendChild(btn);
+            });
+
+            // Afficher
+            backdrop.style.display = 'block';
+            container.style.display = 'block';
+        });
+
+        // ── Vote ──
+        function voter(option) {
+            // Désactiver tous les boutons pour éviter les double-votes
+            document.querySelectorAll('#options-container button').forEach(b => {
+                b.disabled = true;
+                b.style.opacity = '0.5';
+            });
+
+            fetch('https://blast-mg48.onrender.com/vote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ option }),
+            })
+            .then(r => r.json())
+            .then(() => {
+                document.getElementById('merci-message').style.display = 'block';
+                setTimeout(fermerSondage, 2000);
+            })
+            .catch(err => {
+                console.error('Erreur vote:', err);
+                // En cas d'erreur réseau, on ferme quand même proprement
+                setTimeout(fermerSondage, 1500);
+            });
+        }
+
+        function fermerSondage() {
+            document.getElementById('sondage-container').style.display = 'none';
+            document.getElementById('sondage-backdrop').style.display = 'none';
+            document.getElementById('merci-message').style.display = 'none';
+            // Réactiver les boutons pour le prochain sondage
+            document.querySelectorAll('#options-container button').forEach(b => {
+                b.disabled = false;
+                b.style.opacity = '';
+            });
+        }
+
+    </script>
+</body>
+</html>
