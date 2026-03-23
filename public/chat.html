@@ -588,7 +588,7 @@
                     <span class="message-author ${colorClass}-text" style="color:var(--text-primary)">${escapeHtml(data.nickname)}</span>
                     <span class="message-time">${formatTime(data.timestamp)}</span>
                 </div>
-                <div class="message-text">${escapeHtml(data.text)}</div>
+                <div class="message-text">${linkify(data.text)}</div>
             </div>`;
 
         list.appendChild(group);
@@ -616,6 +616,15 @@
 
     function escapeHtml(str) {
         return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // Transforme les URLs en liens cliquables (après échappement HTML)
+    function linkify(str) {
+        const escaped = escapeHtml(str);
+        return escaped.replace(
+            /(https?:\/\/[-\w@:%.\+~#=/?&]+)/g,
+            '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+        );
     }
 
     function updateTypingIndicator() {
@@ -739,8 +748,39 @@
 
     // ── CSS animation ──
     const style = document.createElement('style');
-    style.textContent = '@keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }';
+    style.textContent = `
+        @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+        .message-text a {
+            color: #00aff4;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+            word-break: break-all;
+        }
+        .message-text a:hover { color: #5bc8f5; }
+    `;
     document.head.appendChild(style);
+
+    // ── Vibration sur nouveau message ──
+    socket.on('message', () => {
+        if (navigator.vibrate) navigator.vibrate(60);
+    });
+
+    // ── Wake Lock (empêche la mise en veille) ──
+    let wakeLock = null;
+    async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+            } catch (e) {
+                console.warn('Wake Lock refusé :', e);
+            }
+        }
+    }
+    // Réacquérir si la page redevient visible (ex: retour d'onglet)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') requestWakeLock();
+    });
+    requestWakeLock();
 </script>
 </body>
 </html>
