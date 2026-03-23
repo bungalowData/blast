@@ -629,10 +629,13 @@
     // Transforme les URLs en liens cliquables (après échappement HTML)
     function linkify(str) {
         const escaped = escapeHtml(str);
-        return escaped.replace(
-            /(https?:\/\/[-\w@:%.\+~#=/?&]+)/g,
-            '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
-        );
+        // 1) liens avec protocole : http:// ou https://
+        // 2) liens sans protocole commençant par www.
+        return escaped
+            .replace(/(https?:\/\/[-\w@:%.\+~#=/?&]+)/g,
+                '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
+            .replace(/(?<![="\/])(www\.[-\w@:%.\+~#=/?&]+)/g,
+                '<a href="https://$1" target="_blank" rel="noopener noreferrer">$1</a>');
     }
 
     function updateTypingIndicator() {
