@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=gg+sans:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap');
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -26,7 +26,7 @@
             --border: rgba(255,255,255,0.06);
             --shadow: 0 4px 24px rgba(0,0,0,0.4);
             --radius: 8px;
-            --font: 'gg sans', 'Segoe UI', system-ui, sans-serif;
+            --font: 'Noto Sans', 'Segoe UI', system-ui, sans-serif;
         }
 
         html, body {
@@ -484,8 +484,7 @@
 
     // ── Join success ──
     socket.on('join_success', () => {
-        document.getElementById('nickname-overlay').style.display = 'none';
-        document.getElementById('message-input').focus();
+        joinSuccess();
     });
 
     // ── System messages ──
@@ -630,6 +629,14 @@
     document.getElementById('send-btn').addEventListener('click', sendMessage);
 
     // ── Nickname modal ──
+    let joinTimeout = null;
+
+    function joinSuccess() {
+        clearTimeout(joinTimeout);
+        document.getElementById('nickname-overlay').style.display = 'none';
+        document.getElementById('message-input').focus();
+    }
+
     function submitNickname() {
         const val = document.getElementById('nickname-input').value.trim();
         if (!val) return;
@@ -639,6 +646,13 @@
         myNickname = val;
         myColor = getColorClass(val);
         socket.emit('join', { nickname: val });
+
+        // Fallback : si le serveur ne connaît pas encore l'événement 'join'
+        // (ancienne version non déployée), on entre quand même après 1,5 s
+        joinTimeout = setTimeout(() => {
+            console.warn('Pas de réponse join_success — entrée en mode dégradé');
+            joinSuccess();
+        }, 1500);
     }
 
     document.getElementById('nickname-submit').addEventListener('click', submitNickname);
