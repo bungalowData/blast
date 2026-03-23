@@ -306,6 +306,49 @@
         #send-btn.active { color: var(--accent); }
         #send-btn svg { width: 20px; height: 20px; fill: currentColor; }
 
+        /* ── Emoji button & picker ── */
+        #emoji-btn {
+            background: none;
+            border: none;
+            padding: 8px;
+            cursor: pointer;
+            font-size: 20px;
+            line-height: 1;
+            opacity: 0.5;
+            transition: opacity 0.15s, transform 0.1s;
+            flex-shrink: 0;
+        }
+        #emoji-btn:hover { opacity: 1; transform: scale(1.15); }
+
+        #emoji-picker-container {
+            position: absolute;
+            bottom: 70px;
+            right: 16px;
+            z-index: 500;
+            display: none;
+            filter: drop-shadow(0 8px 24px rgba(0,0,0,0.5));
+        }
+        #emoji-picker-container.open { display: block; }
+
+        emoji-picker {
+            --background: #2b2d31;
+            --border-color: rgba(255,255,255,0.08);
+            --button-active-background: rgba(88,101,242,0.3);
+            --button-hover-background: rgba(255,255,255,0.07);
+            --input-border-color: rgba(255,255,255,0.1);
+            --input-font-color: #dbdee1;
+            --input-placeholder-color: #80848e;
+            --outline-color: #5865f2;
+            --category-font-color: #b5bac1;
+            --text-color: #dbdee1;
+            --emoji-size: 1.4rem;
+            --num-columns: 8;
+            width: 320px;
+            height: 380px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
         /* ── Nickname modal ── */
         #nickname-overlay {
             position: fixed;
@@ -426,8 +469,12 @@
 
     <div id="typing-indicator"></div>
 
-    <div id="input-area">
+    <div id="input-area" style="position:relative;">
+        <div id="emoji-picker-container">
+            <emoji-picker></emoji-picker>
+        </div>
         <div id="input-box">
+            <button id="emoji-btn" title="Émojis">😊</button>
             <textarea id="message-input" placeholder="Envoyer un message…" rows="1"></textarea>
             <button id="send-btn" title="Envoyer">
                 <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
@@ -437,6 +484,7 @@
 </div>
 
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
 <script>
     // ── State ──
     let myNickname = null;
@@ -654,6 +702,39 @@
     document.getElementById('nickname-submit').addEventListener('click', submitNickname);
     document.getElementById('nickname-input').addEventListener('keydown', e => {
         if (e.key === 'Enter') submitNickname();
+    });
+
+    // ── Emoji picker ──
+    const emojiBtn = document.getElementById('emoji-btn');
+    const pickerContainer = document.getElementById('emoji-picker-container');
+
+    emojiBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        pickerContainer.classList.toggle('open');
+    });
+
+    // Insérer l'émoji dans le textarea
+    pickerContainer.addEventListener('emoji-click', (e) => {
+        const input = document.getElementById('message-input');
+        const emoji = e.detail.unicode;
+        const start = input.selectionStart;
+        const end = input.selectionEnd;
+        const val = input.value;
+        input.value = val.slice(0, start) + emoji + val.slice(end);
+        // Replacer le curseur après l'émoji
+        input.selectionStart = input.selectionEnd = start + emoji.length;
+        input.focus();
+        // Mettre à jour l'état du bouton envoyer
+        document.getElementById('send-btn').classList.toggle('active', input.value.trim().length > 0);
+        // Fermer le picker
+        pickerContainer.classList.remove('open');
+    });
+
+    // Fermer le picker en cliquant ailleurs
+    document.addEventListener('click', (e) => {
+        if (!pickerContainer.contains(e.target) && e.target !== emojiBtn) {
+            pickerContainer.classList.remove('open');
+        }
     });
 
     // ── CSS animation ──
