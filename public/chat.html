@@ -503,6 +503,14 @@
     socket.on('connect', () => console.log('Socket connecté'));
     socket.on('connect_error', (e) => console.warn('Erreur socket:', e));
 
+    // ── History cleared by admin ──
+    socket.on('history_cleared', () => {
+        document.getElementById('messages-list').innerHTML = '';
+        lastAuthor = null;
+        lastTimestamp = 0;
+        appendSystem('L\'historique a été effacé par un administrateur.');
+    });
+
     // ── History on join ──
     socket.on('history', (messages) => {
         messages.forEach(m => appendMessage(m, false));

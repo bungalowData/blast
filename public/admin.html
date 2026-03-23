@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLAST — Admin</title>
+    <link rel="icon" href="./favicon.ico">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap');
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #1e1f22;
+            --surface: #2b2d31;
+            --surface2: #313338;
+            --border: rgba(255,255,255,0.07);
+            --text: #dbdee1;
+            --text-muted: #80848e;
+            --accent: #5865f2;
+            --accent-hover: #4752c4;
+            --red: #f23f43;
+            --red-hover: #c0373b;
+            --green: #23a55a;
+            --font: 'Noto Sans', 'Segoe UI', system-ui, sans-serif;
+            --radius: 8px;
+            --shadow: 0 4px 24px rgba(0,0,0,0.4);
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font);
+            min-height: 100vh;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 24px 16px 48px;
+        }
+
+        .card {
+            background: var(--surface);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            width: 100%;
+            max-width: 480px;
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card-header .logo { font-size: 20px; font-weight: 700; color: var(--accent); }
+        .card-header .badge {
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 1px; color: var(--text-muted);
+            background: var(--surface2); padding: 3px 8px; border-radius: 4px;
+        }
+
+        .card-body { padding: 24px; }
+
+        /* ── Tabs ── */
+        .tabs {
+            display: flex; gap: 2px;
+            background: var(--surface2);
+            border-radius: var(--radius);
+            padding: 3px; margin-bottom: 24px;
+        }
+        .tab-btn {
+            flex: 1; padding: 8px 4px;
+            background: none; border: none;
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 13px; font-weight: 600; font-family: var(--font);
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+        .tab-btn:hover { color: var(--text); }
+        .tab-btn.active { background: var(--surface); color: var(--text); }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* ── Form elements ── */
+        .field-label {
+            display: block; font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .5px;
+            color: var(--text-muted); margin-bottom: 6px;
+        }
+        .field-input {
+            width: 100%; background: var(--bg);
+            border: 1px solid var(--border); border-radius: var(--radius);
+            padding: 10px 14px; color: var(--text);
+            font-size: 15px; font-family: var(--font);
+            outline: none; transition: border-color 0.15s; margin-bottom: 14px;
+        }
+        .field-input:focus { border-color: var(--accent); }
+        .error-msg { color: var(--red); font-size: 13px; margin-bottom: 12px; display: none; }
+
+        /* ── Buttons ── */
+        .btn {
+            width: 100%; padding: 11px; border: none;
+            border-radius: var(--radius); font-size: 15px; font-weight: 600;
+            font-family: var(--font); cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-danger { background: var(--red); color: white; }
+        .btn-danger:hover { background: var(--red-hover); }
+        .btn-success { background: var(--green); color: white; }
+        .btn-success:hover { background: #1a8a4a; }
+
+        .btn-sm {
+            padding: 7px 14px; font-size: 13px; font-weight: 600;
+            border: none; border-radius: 6px; cursor: pointer;
+            font-family: var(--font); transition: background 0.15s;
+        }
+        .btn-sm.danger { background: var(--red); color: white; }
+        .btn-sm.danger:hover { background: var(--red-hover); }
+        .btn-sm.cancel { background: var(--surface); color: var(--text-muted); border: 1px solid var(--border); }
+        .btn-sm.cancel:hover { color: var(--text); }
+
+        /* ── Stats ── */
+        .stat-row { display: flex; gap: 10px; margin-bottom: 20px; }
+        .stat {
+            flex: 1; background: var(--surface2);
+            border-radius: var(--radius); padding: 12px 14px;
+            border: 1px solid var(--border);
+        }
+        .stat .label {
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .5px; color: var(--text-muted); margin-bottom: 4px;
+        }
+        .stat .value { font-size: 22px; font-weight: 700; }
+
+        /* ── Action card ── */
+        .action-card {
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
+        }
+        .action-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+        .action-card p { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5; }
+        .confirm-row { display: none; align-items: center; gap: 8px; margin-top: 10px; }
+        .confirm-row.visible { display: flex; }
+        .confirm-row span { font-size: 13px; color: var(--text-muted); flex: 1; }
+
+        /* ── Sondage ── */
+        .section-title {
+            font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .5px; color: var(--text-muted); margin-bottom: 10px;
+        }
+        .responses-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+        .response-row { display: flex; gap: 8px; align-items: center; }
+        .response-row .field-input { margin-bottom: 0; flex: 1; }
+        .remove-btn {
+            background: none; border: none; color: var(--text-muted);
+            cursor: pointer; font-size: 20px; padding: 2px 6px; line-height: 1;
+            border-radius: 4px; transition: color 0.15s; flex-shrink: 0;
+        }
+        .remove-btn:hover { color: var(--red); }
+        .add-response-btn {
+            background: none; border: 1px dashed var(--border);
+            border-radius: var(--radius); color: var(--text-muted);
+            font-size: 13px; font-family: var(--font); cursor: pointer;
+            padding: 8px; width: 100%; text-align: center;
+            transition: border-color 0.15s, color 0.15s; margin-bottom: 16px;
+        }
+        .add-response-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* ── Résultats ── */
+        #poll-question-display {
+            font-size: 15px; font-weight: 600;
+            color: var(--text); margin-bottom: 16px;
+            text-align: center; min-height: 22px;
+        }
+        .result-item {
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px;
+        }
+        .result-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
+        .result-name { font-size: 14px; font-weight: 600; }
+        .result-count { font-size: 13px; color: var(--text-muted); }
+        .result-bar-bg { background: var(--bg); border-radius: 4px; height: 8px; overflow: hidden; }
+        .result-bar { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.5s ease; }
+        .result-bar.leader { background: var(--green); }
+        .result-pct { font-size: 12px; color: var(--text-muted); margin-top: 4px; text-align: right; }
+        .no-results { text-align: center; color: var(--text-muted); font-size: 14px; padding: 28px 0; }
+        .total-votes { text-align: center; font-size: 12px; color: var(--text-muted); margin-top: 12px; }
+
+        /* ── Logout ── */
+        .logout-btn {
+            background: none; border: none; color: var(--text-muted);
+            font-size: 13px; cursor: pointer; font-family: var(--font);
+            padding: 0; margin-top: 16px; display: block;
+            width: 100%; text-align: center; transition: color 0.15s;
+        }
+        .logout-btn:hover { color: var(--text); }
+
+        /* ── Toast ── */
+        #toast {
+            position: fixed; bottom: 24px; left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 12px 20px;
+            font-size: 14px; font-weight: 500; box-shadow: var(--shadow);
+            transition: transform 0.3s ease; white-space: nowrap; z-index: 999;
+        }
+        #toast.success { border-color: var(--green); color: var(--green); }
+        #toast.error   { border-color: var(--red);   color: var(--red); }
+        #toast.info    { border-color: var(--accent); color: var(--accent); }
+        #toast.show    { transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="card-header">
+        <span class="logo">BLAST</span>
+        <span class="badge">Administration</span>
+    </div>
+    <div class="card-body">
+
+        <!-- ══ LOGIN ══ -->
+        <div id="login-section">
+            <label class="field-label" for="pwd-input">Mot de passe</label>
+            <input id="pwd-input" class="field-input" type="password" placeholder="••••••••" autocomplete="current-password" />
+            <div id="login-error" class="error-msg">Mot de passe incorrect.</div>
+            <button class="btn btn-primary" id="login-btn">Se connecter</button>
+        </div>
+
+        <!-- ══ DASHBOARD ══ -->
+        <div id="dashboard-section" style="display:none">
+
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="general">⚙️ Général</button>
+                <button class="tab-btn" data-tab="sondage">📊 Sondage</button>
+                <button class="tab-btn" data-tab="resultats">📈 Résultats</button>
+            </div>
+
+            <!-- ── Général ── -->
+            <div id="tab-general" class="tab-panel active">
+                <div class="stat-row">
+                    <div class="stat">
+                        <div class="label">En ligne</div>
+                        <div class="value" id="stat-online">—</div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Messages</div>
+                        <div class="value" id="stat-messages">—</div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Votes</div>
+                        <div class="value" id="stat-votes">—</div>
+                    </div>
+                </div>
+
+                <div class="action-card">
+                    <h3>🗑️ Vider l'historique du chat</h3>
+                    <p>Supprime tous les messages. Les utilisateurs connectés verront leur chat se vider immédiatement.</p>
+                    <button class="btn btn-danger" id="clear-btn">Vider l'historique</button>
+                    <div class="confirm-row" id="confirm-row">
+                        <span>Confirmer la suppression ?</span>
+                        <button class="btn-sm cancel" id="cancel-btn">Annuler</button>
+                        <button class="btn-sm danger" id="confirm-btn">Confirmer</button>
+                    </div>
+                </div>
+
+                <button class="logout-btn" id="logout-btn">Se déconnecter</button>
+            </div>
+
+            <!-- ── Sondage ── -->
+            <div id="tab-sondage" class="tab-panel">
+                <div class="section-title">Question</div>
+                <input id="poll-question" class="field-input" type="text"
+                    placeholder="Ex : Quel est votre sport préféré ?" maxlength="200" />
+
+                <div class="section-title">Réponses</div>
+                <div class="responses-list" id="responses-list">
+                    <div class="response-row">
+                        <input class="field-input response-input" type="text" placeholder="Réponse 1" maxlength="100" />
+                        <button class="remove-btn" title="Supprimer">×</button>
+                    </div>
+                    <div class="response-row">
+                        <input class="field-input response-input" type="text" placeholder="Réponse 2" maxlength="100" />
+                        <button class="remove-btn" title="Supprimer">×</button>
+                    </div>
+                </div>
+                <button class="add-response-btn" id="add-response-btn">+ Ajouter une réponse</button>
+                <button class="btn btn-success" id="launch-poll-btn">🚀 Lancer le sondage</button>
+            </div>
+
+            <!-- ── Résultats ── -->
+            <div id="tab-resultats" class="tab-panel">
+                <div id="poll-question-display">Aucun sondage actif.</div>
+                <div id="results-container">
+                    <div class="no-results">Lance un sondage pour voir les résultats ici.</div>
+                </div>
+                <div class="total-votes" id="total-votes"></div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+    const SERVER = 'https://blast-mg48.onrender.com';
+    let adminPassword = null;
+    let currentPoll = { question: '', reponses: [] };
+    let resultsInterval = null;
+    let responseCount = 2;
+
+    // ── Socket ──
+    const socket = io(SERVER);
+    socket.on('user_count', count => {
+        document.getElementById('stat-online').textContent = count;
+    });
+    socket.on('afficher_sondage', poll => {
+        currentPoll = poll;
+        document.getElementById('poll-question-display').textContent = poll.question || 'Aucun sondage actif.';
+    });
+
+    // ── Toast ──
+    function showToast(msg, type = 'success') {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = type + ' show';
+        setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    function escapeHtml(str) {
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── Login ──
+    async function login() {
+        const pwd = document.getElementById('pwd-input').value;
+        if (!pwd) return;
+        try {
+            const res = await fetch(`${SERVER}/admin/clear-history`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pwd, check: true }),
+            });
+            if (res.status === 401) {
+                document.getElementById('login-error').style.display = 'block';
+                return;
+            }
+            adminPassword = pwd;
+            showDashboard();
+        } catch (e) {
+            showToast('Impossible de joindre le serveur.', 'error');
+        }
+    }
+
+    function showDashboard() {
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('dashboard-section').style.display = 'block';
+        fetchStats();
+        resultsInterval = setInterval(() => {
+            if (currentPoll.reponses.length > 0) fetchResults();
+        }, 5000);
+    }
+
+    async function fetchStats() {
+        try {
+            const res = await fetch(`${SERVER}/admin/stats`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: adminPassword }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById('stat-messages').textContent = data.messageCount;
+                document.getElementById('stat-online').textContent = data.onlineCount;
+                document.getElementById('stat-votes').textContent = data.voteCount ?? '—';
+                if (data.currentPoll && data.currentPoll.question) {
+                    currentPoll = data.currentPoll;
+                    document.getElementById('poll-question-display').textContent = data.currentPoll.question;
+                    fetchResults();
+                }
+            }
+        } catch (e) {}
+    }
+
+    document.getElementById('login-btn').addEventListener('click', login);
+    document.getElementById('pwd-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') login();
+    });
+
+    // ── Tabs ──
+    function switchTab(name) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+    }
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            switchTab(btn.dataset.tab);
+            if (btn.dataset.tab === 'resultats') fetchResults();
+            if (btn.dataset.tab === 'general') fetchStats();
+        });
+    });
+
+    // ── Clear history ──
+    document.getElementById('clear-btn').addEventListener('click', () => {
+        document.getElementById('confirm-row').classList.add('visible');
+        document.getElementById('clear-btn').style.display = 'none';
+    });
+    document.getElementById('cancel-btn').addEventListener('click', () => {
+        document.getElementById('confirm-row').classList.remove('visible');
+        document.getElementById('clear-btn').style.display = 'block';
+    });
+    document.getElementById('confirm-btn').addEventListener('click', async () => {
+        try {
+            const res = await fetch(`${SERVER}/admin/clear-history`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: adminPassword }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('✅ Historique vidé avec succès.');
+                document.getElementById('stat-messages').textContent = '0';
+            } else {
+                showToast(data.error || 'Erreur.', 'error');
+            }
+        } catch (e) {
+            showToast('Impossible de joindre le serveur.', 'error');
+        }
+        document.getElementById('confirm-row').classList.remove('visible');
+        document.getElementById('clear-btn').style.display = 'block';
+    });
+
+    // ── Logout ──
+    document.getElementById('logout-btn').addEventListener('click', () => {
+        adminPassword = null;
+        clearInterval(resultsInterval);
+        document.getElementById('dashboard-section').style.display = 'none';
+        document.getElementById('login-section').style.display = 'block';
+        document.getElementById('pwd-input').value = '';
+        switchTab('general');
+    });
+
+    // ── Gestion des réponses ──
+    function updateRemoveButtons() {
+        const rows = document.querySelectorAll('#responses-list .response-row');
+        rows.forEach(row => {
+            row.querySelector('.remove-btn').style.visibility = rows.length > 2 ? 'visible' : 'hidden';
+        });
+    }
+
+    function bindRemoveBtn(btn) {
+        btn.addEventListener('click', () => {
+            btn.closest('.response-row').remove();
+            updateRemoveButtons();
+        });
+    }
+
+    document.querySelectorAll('#responses-list .remove-btn').forEach(bindRemoveBtn);
+    updateRemoveButtons();
+
+    document.getElementById('add-response-btn').addEventListener('click', () => {
+        if (document.querySelectorAll('#responses-list .response-row').length >= 8) {
+            showToast('Maximum 8 réponses.', 'info'); return;
+        }
+        responseCount++;
+        const row = document.createElement('div');
+        row.className = 'response-row';
+        row.innerHTML = `
+            <input class="field-input response-input" type="text" placeholder="Réponse ${responseCount}" maxlength="100" />
+            <button class="remove-btn" title="Supprimer">×</button>`;
+        bindRemoveBtn(row.querySelector('.remove-btn'));
+        document.getElementById('responses-list').appendChild(row);
+        updateRemoveButtons();
+        row.querySelector('input').focus();
+    });
+
+    // ── Lancer sondage ──
+    document.getElementById('launch-poll-btn').addEventListener('click', () => {
+        const question = document.getElementById('poll-question').value.trim();
+        const reponses = [...document.querySelectorAll('.response-input')]
+            .map(i => i.value.trim()).filter(Boolean);
+
+        if (!question) { showToast('Veuillez saisir une question.', 'error'); return; }
+        if (reponses.length < 2) { showToast('Au moins 2 réponses requises.', 'error'); return; }
+
+        socket.emit('nouveau_sondage', { question, reponses });
+        currentPoll = { question, reponses };
+        showToast('🚀 Sondage lancé !');
+
+        setTimeout(() => {
+            switchTab('resultats');
+            document.getElementById('poll-question-display').textContent = question;
+            fetchResults();
+        }, 500);
+    });
+
+    // ── Résultats ──
+    async function fetchResults() {
+        if (!currentPoll.reponses.length) return;
+        try {
+            const res = await fetch(`${SERVER}/results`);
+            const data = await res.json();
+
+            const container = document.getElementById('results-container');
+            const totalVotes = Object.values(data).reduce((s, v) => s + v, 0);
+            const maxVotes = Math.max(...Object.values(data), 0);
+
+            document.getElementById('stat-votes').textContent = totalVotes;
+            document.getElementById('total-votes').textContent =
+                totalVotes > 0 ? `Total : ${totalVotes} vote${totalVotes > 1 ? 's' : ''}` : '';
+
+            if (totalVotes === 0) {
+                container.innerHTML = '<div class="no-results">En attente des premiers votes…</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            const sorted = [...currentPoll.reponses].sort((a, b) => (data[b] || 0) - (data[a] || 0));
+            sorted.forEach(reponse => {
+                const votes = data[reponse] || 0;
+                const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+                const isLeader = votes === maxVotes && maxVotes > 0;
+                const item = document.createElement('div');
+                item.className = 'result-item';
+                item.innerHTML = `
+                    <div class="result-header">
+                        <span class="result-name">${escapeHtml(reponse)}</span>
+                        <span class="result-count">${votes} vote${votes !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="result-bar-bg">
+                        <div class="result-bar ${isLeader ? 'leader' : ''}" style="width:${pct}%"></div>
+                    </div>
+                    <div class="result-pct">${pct}%</div>`;
+                container.appendChild(item);
+            });
+        } catch (e) {}
+    }
+</script>
+</body>
+</html>

@@ -161,6 +161,42 @@ io.on('connection', (socket) => {
 });
 
 // ─────────────────────────────────────────
+//  ADMIN
+// ─────────────────────────────────────────
+
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'blast-admin';
+
+// Vider l'historique du chat
+app.post('/admin/clear-history', (req, res) => {
+    const { password, check } = req.body;
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).send({ error: 'Mot de passe incorrect.' });
+    }
+    // Mode vérification seule (login check)
+    if (check) {
+        return res.send({ success: true, message: 'Authentifié.' });
+    }
+    messageHistory.length = 0;
+    io.emit('history_cleared');
+    console.log('Historique vidé par un administrateur');
+    res.send({ success: true, message: 'Historique vidé avec succès.' });
+});
+
+// Stats pour la page admin
+app.post('/admin/stats', (req, res) => {
+    const { password } = req.body;
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).send({ error: 'Mot de passe incorrect.' });
+    }
+    res.send({
+        messageCount: messageHistory.length,
+        onlineCount: connectedUsers.size,
+        voteCount: votes.length,
+        currentPoll: currentPoll,
+    });
+});
+
+// ─────────────────────────────────────────
 server.listen(PORT, () => {
     console.log(`Serveur démarré sur http://localhost:${PORT}`);
 });
