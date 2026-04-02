@@ -105,6 +105,30 @@
             z-index: 999;
             display: none;
         }
+
+        /* ── Image plein écran ── */
+        #image-overlay {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            animation: fadeInOverlay .3s ease;
+        }
+        #image-overlay.visible {
+            display: flex;
+        }
+        @keyframes fadeInOverlay {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+        #image-overlay img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
     </style>
 </head>
 <body>
@@ -112,6 +136,11 @@
     <!-- Chat public -->
     <div id="iframe-container">
         <iframe src="./chat.html" id="chat-iframe"></iframe>
+    </div>
+
+    <!-- Image plein écran -->
+    <div id="image-overlay">
+        <img id="image-overlay-img" src="" alt="" />
     </div>
 
     <!-- Backdrop sondage -->
@@ -190,6 +219,19 @@
                 setTimeout(fermerSondage, 1500);
             });
         }
+
+        // ── Image plein écran ──
+        socket.on('show_image', ({ imageUrl }) => {
+            const overlay = document.getElementById('image-overlay');
+            document.getElementById('image-overlay-img').src = imageUrl;
+            overlay.classList.add('visible');
+        });
+
+        socket.on('hide_image', () => {
+            const overlay = document.getElementById('image-overlay');
+            overlay.classList.remove('visible');
+            document.getElementById('image-overlay-img').src = '';
+        });
 
         function fermerSondage() {
             document.getElementById('sondage-container').style.display = 'none';

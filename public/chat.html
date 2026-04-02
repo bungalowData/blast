@@ -772,8 +772,18 @@
     document.head.appendChild(style);
 
     // ── Vibration sur nouveau message ──
-    socket.on('message', () => {
-        if (navigator.vibrate) navigator.vibrate(60);
+    socket.on('message', (data) => {
+        if (!navigator.vibrate) return;
+        if (data && data.nickname && data.nickname.toUpperCase() === 'BLAST') {
+            navigator.vibrate([300, 100, 300, 100, 300]);
+        } else {
+            navigator.vibrate(60);
+        }
+    });
+
+    // ── Vibration déclenchée par l'admin ──
+    socket.on('vibrate', () => {
+        if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
     });
 
     // ── Wake Lock (empêche la mise en veille) ──

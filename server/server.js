@@ -51,6 +51,7 @@ function saveTemplates(templates) {
 // ─────────────────────────────────────────
 let votes = [];
 let currentPoll = { question: '', reponses: [] };
+let currentImage = null;
 
 app.post('/vote', (req, res) => {
     const { option } = req.body;
@@ -109,6 +110,27 @@ io.on('connection', (socket) => {
         votes = [];
         console.log(`Nouveau sondage : ${data.question}`);
         io.emit('afficher_sondage', currentPoll);
+    });
+
+    // ── Admin : vibrer tous les clients ──
+    socket.on('admin_vibrate', () => {
+        io.emit('vibrate');
+        console.log('Vibration déclenchée par admin');
+    });
+
+    // ── Admin : afficher image plein écran ──
+    socket.on('show_image', ({ imageUrl }) => {
+        if (!imageUrl || typeof imageUrl !== 'string') return;
+        currentImage = imageUrl.trim();
+        io.emit('show_image', { imageUrl: currentImage });
+        console.log(`Image affichée : ${currentImage}`);
+    });
+
+    // ── Admin : masquer image ──
+    socket.on('hide_image', () => {
+        currentImage = null;
+        io.emit('hide_image');
+        console.log('Image masquée');
     });
 
     // ── Chat : rejoindre avec un pseudo ──

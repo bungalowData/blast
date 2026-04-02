@@ -419,6 +419,23 @@
                     </div>
                 </div>
 
+                <div class="action-card">
+                    <h3>📳 Vibrer les téléphones</h3>
+                    <p>Envoie une vibration sur tous les appareils connectés.</p>
+                    <button class="btn btn-primary" id="vibrate-btn">Faire vibrer</button>
+                </div>
+
+                <div class="action-card">
+                    <h3>🖼️ Afficher une image</h3>
+                    <p>Affiche une image en plein écran sur tous les browsers clients.</p>
+                    <input id="image-url-input" class="field-input" type="url"
+                        placeholder="https://exemple.com/image.jpg" />
+                    <div style="display:flex;gap:8px">
+                        <button class="btn btn-success" id="show-image-btn" style="flex:1">Afficher</button>
+                        <button class="btn btn-danger" id="hide-image-btn" style="flex:1">Masquer</button>
+                    </div>
+                </div>
+
                 <button class="logout-btn" id="logout-btn">Se déconnecter</button>
             </div>
 
@@ -607,6 +624,25 @@
         }
         document.getElementById('confirm-row').classList.remove('visible');
         document.getElementById('clear-btn').style.display = 'block';
+    });
+
+    // ── Vibrer ──
+    document.getElementById('vibrate-btn').addEventListener('click', () => {
+        socket.emit('admin_vibrate');
+        showToast('📳 Vibration envoyée !');
+    });
+
+    // ── Image plein écran ──
+    document.getElementById('show-image-btn').addEventListener('click', () => {
+        const imageUrl = document.getElementById('image-url-input').value.trim();
+        if (!imageUrl) { showToast('Veuillez saisir une URL d\'image.', 'error'); return; }
+        socket.emit('show_image', { imageUrl });
+        showToast('🖼️ Image affichée !');
+    });
+
+    document.getElementById('hide-image-btn').addEventListener('click', () => {
+        socket.emit('hide_image');
+        showToast('Image masquée.', 'info');
     });
 
     // ── Logout ──
