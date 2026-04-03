@@ -786,6 +786,11 @@
         if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
     });
 
+    // ── Fermer le clavier quand une image est affichée ──
+    socket.on('show_image', () => {
+        if (document.activeElement) document.activeElement.blur();
+    });
+
     // ── Wake Lock (empêche la mise en veille) ──
     let wakeLock = null;
     async function requestWakeLock() {
