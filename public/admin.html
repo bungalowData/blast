@@ -155,6 +155,44 @@
         .confirm-row.visible { display: flex; }
         .confirm-row span { font-size: 13px; color: var(--text-muted); flex: 1; }
 
+        /* ── Presets images ── */
+        .presets-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .preset-thumb {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 6px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: border-color 0.15s, transform 0.1s;
+            background: var(--bg);
+        }
+        .preset-thumb:hover { border-color: var(--accent); transform: scale(1.05); }
+        .preset-thumb.selected { border-color: var(--green); }
+        .preset-thumb img {
+            width: 100%; height: 100%;
+            object-fit: cover; display: block;
+        }
+        .preset-thumb .preset-num {
+            position: absolute; bottom: 2px; right: 4px;
+            font-size: 9px; font-weight: 700;
+            color: rgba(255,255,255,0.8);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+        }
+        .preset-empty {
+            aspect-ratio: 1;
+            border-radius: 6px;
+            background: var(--bg);
+            border: 1px dashed var(--border);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; color: var(--text-muted);
+        }
+
         /* ── Sondage ── */
         .section-title {
             font-size: 11px; font-weight: 700; text-transform: uppercase;
@@ -427,7 +465,8 @@
 
                 <div class="action-card">
                     <h3>🖼️ Afficher une image</h3>
-                    <p>Affiche une image en plein écran sur tous les browsers clients.</p>
+                    <p>Cliquez sur un preset ou saisissez une URL, puis appuyez sur Afficher.</p>
+                    <div class="presets-grid" id="presets-grid"></div>
                     <input id="image-url-input" class="field-input" type="url"
                         placeholder="https://exemple.com/image.jpg" />
                     <div style="display:flex;gap:8px">
@@ -625,6 +664,43 @@
         document.getElementById('confirm-row').classList.remove('visible');
         document.getElementById('clear-btn').style.display = 'block';
     });
+
+    // ── Presets images ──
+    const PRESET_IMAGES = [
+        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image1.jpg',
+        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image2.jpg',
+        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image3.jpg',
+        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image4.jpg',
+        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image5.jpg',
+        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image6.jpg',
+        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image7.jpg',
+        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image8.jpg',
+        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image9.jpg',
+        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image10.jpg',
+    ];
+
+    (function renderPresets() {
+        const grid = document.getElementById('presets-grid');
+        PRESET_IMAGES.forEach((url, i) => {
+            if (!url) {
+                const empty = document.createElement('div');
+                empty.className = 'preset-empty';
+                empty.textContent = `${i + 1}`;
+                grid.appendChild(empty);
+                return;
+            }
+            const thumb = document.createElement('div');
+            thumb.className = 'preset-thumb';
+            thumb.dataset.url = url;
+            thumb.innerHTML = `<img src="${url}" alt="Preset ${i + 1}" loading="lazy" /><span class="preset-num">${i + 1}</span>`;
+            thumb.addEventListener('click', () => {
+                document.querySelectorAll('.preset-thumb').forEach(t => t.classList.remove('selected'));
+                thumb.classList.add('selected');
+                document.getElementById('image-url-input').value = url;
+            });
+            grid.appendChild(thumb);
+        });
+    })();
 
     // ── Vibrer ──
     document.getElementById('vibrate-btn').addEventListener('click', () => {

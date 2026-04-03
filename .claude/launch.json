@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Backend (Express + Socket.IO)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server/server.js"],
+      "port": 3000
+    },
+    {
+      "name": "Frontend (Static)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "public", "-p", "8080", "--no-clipboard"],
+      "port": 8080
+    }
+  ]
+}
