@@ -100,6 +100,11 @@ function broadcastUserCount() {
 io.on('connection', (socket) => {
     console.log(`Nouvelle connexion : ${socket.id}`);
 
+    // ── Envoyer l'image en cours au nouveau client ──
+    if (currentImage) {
+        socket.emit('show_image', { imageUrl: currentImage });
+    }
+
     // ── Sondage (existant) ──
     socket.on('demander_sondage', () => {
         io.emit('afficher_sondage', currentPoll);
