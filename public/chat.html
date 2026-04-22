@@ -634,8 +634,8 @@
         return escaped
             .replace(/(https?:\/\/[-\w@:%.\+~#=/?&]+)/g,
                 '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
-            .replace(/(?<![="\/])(www\.[-\w@:%.\+~#=/?&]+)/g,
-                '<a href="https://$1" target="_blank" rel="noopener noreferrer">$1</a>');
+            .replace(/(^|[^="\/])(www\.[-\w@:%.\+~#=/?&]+)/g,
+                (_, prefix, url) => `${prefix}<a href="https://${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
     }
 
     function updateTypingIndicator() {
