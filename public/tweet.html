@@ -67,11 +67,19 @@
         #header a.back-link {
             margin-left: auto;
             font-size: 13px;
-            color: var(--text-muted);
+            font-weight: 600;
+            color: var(--text-primary);
             text-decoration: none;
-            transition: color 0.15s;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 12px;
+            transition: background 0.15s, border-color 0.15s;
         }
-        #header a.back-link:hover { color: var(--text-primary); }
+        #header a.back-link:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent);
+        }
 
         /* ── Content ── */
         #content {
@@ -307,13 +315,27 @@
     // ── Compteur de caractères ──
     const input = document.getElementById('tweet-input');
     const counter = document.getElementById('char-counter');
+    const btn = document.getElementById('post-tweet-btn');
+
+    // Dernier texte enregistré sur le serveur (null si rien posté).
+    // Sert à n'afficher "Mettre à jour" que si l'utilisateur modifie sa saisie.
+    let lastSubmittedText = null;
 
     function updateCounter() {
         const len = input.value.length;
         counter.textContent = `${len} / 160`;
         counter.classList.toggle('warning', len >= 150);
     }
-    input.addEventListener('input', updateCounter);
+
+    function updateButtonLabel() {
+        const modified = lastSubmittedText !== null && input.value.trim() !== lastSubmittedText;
+        btn.textContent = modified ? 'Mettre à jour' : 'Poster';
+    }
+
+    input.addEventListener('input', () => {
+        updateCounter();
+        updateButtonLabel();
+    });
 
     // ── Charger un tweet existant ──
     async function loadExistingTweet() {
@@ -324,9 +346,9 @@
             const data = await res.json();
             if (data.tweet) {
                 input.value = data.tweet.text;
+                lastSubmittedText = data.tweet.text;
                 updateCounter();
-                document.getElementById('post-tweet-btn').textContent = 'Mettre à jour';
-                document.getElementById('status-msg').textContent = 'Tu as déjà posté un tweet, tu peux le modifier.';
+                updateButtonLabel();
             }
         } catch (e) {
             console.warn('Erreur chargement du tweet:', e);
@@ -334,7 +356,7 @@
     }
 
     // ── Poster / mettre à jour ──
-    document.getElementById('post-tweet-btn').addEventListener('click', async () => {
+    btn.addEventListener('click', async () => {
         if (!myNickname) return;
         const text = input.value.trim();
         if (!text) {
@@ -342,7 +364,6 @@
             return;
         }
 
-        const btn = document.getElementById('post-tweet-btn');
         btn.disabled = true;
 
         try {
@@ -356,8 +377,9 @@
                 showToast(data.error || 'Erreur lors de l\'envoi.', 'error');
             } else {
                 showToast('✅ Tweet enregistré !');
-                btn.textContent = 'Mettre à jour';
-                document.getElementById('status-msg').textContent = 'Tu as déjà posté un tweet, tu peux le modifier.';
+                lastSubmittedText = data.tweet ? data.tweet.text : text;
+                updateButtonLabel();
+                document.getElementById('status-msg').textContent = 'Votre tweet a bien été envoyé !';
             }
         } catch (e) {
             showToast('Impossible de joindre le serveur.', 'error');
