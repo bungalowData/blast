@@ -19,31 +19,64 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
+const githubStore = require('./github-store');
+
 // ─────────────────────────────────────────
 //  TEMPLATES DE SONDAGES
 // ─────────────────────────────────────────
 const TEMPLATES_FILE = path.join(__dirname, 'poll-templates.json');
 
-function loadTemplates() {
+// Cache en mémoire, persisté sur GitHub (server/poll-templates.json en fallback local)
+let templatesCache = [];
+
+function loadLocalTemplatesFallback() {
     try {
         if (!fs.existsSync(TEMPLATES_FILE)) {
             fs.writeFileSync(TEMPLATES_FILE, '[]', 'utf8');
         }
         return JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8'));
     } catch (e) {
-        console.error('Erreur lecture templates:', e);
+        console.error('Erreur lecture templates locaux:', e);
         return [];
     }
 }
 
-function saveTemplates(templates) {
+async function loadTemplates() {
+    if (githubStore.isConfigured()) {
+        templatesCache = await githubStore.readJson('poll-templates.json', []);
+    } else {
+        templatesCache = loadLocalTemplatesFallback();
+    }
+    return templatesCache;
+}
+
+async function saveTemplates(templates) {
+    templatesCache = templates;
+    if (githubStore.isConfigured()) {
+        return githubStore.writeJson('poll-templates.json', templates, 'Mise à jour des templates de sondages');
+    }
     try {
         fs.writeFileSync(TEMPLATES_FILE, JSON.stringify(templates, null, 2), 'utf8');
         return true;
     } catch (e) {
-        console.error('Erreur écriture templates:', e);
+        console.error('Erreur écriture templates locaux:', e);
         return false;
     }
+}
+
+// ─────────────────────────────────────────
+//  TWEETS
+// ─────────────────────────────────────────
+let tweetsCache = [];
+
+async function loadTweets() {
+    tweetsCache = await githubStore.readJson('tweets.json', []);
+    return tweetsCache;
+}
+
+async function saveTweets(tweets) {
+    tweetsCache = tweets;
+    return githubStore.writeJson('tweets.json', tweets, 'Mise à jour des tweets');
 }
 
 // ─────────────────────────────────────────
@@ -262,12 +295,11 @@ app.post('/admin/poll-templates', (req, res) => {
     if (password !== ADMIN_PASSWORD) {
         return res.status(401).send({ error: 'Mot de passe incorrect.' });
     }
-    const templates = loadTemplates();
-    res.send({ success: true, templates });
+    res.send({ success: true, templates: templatesCache });
 });
 
 // Ajouter un nouveau template
-app.post('/admin/poll-templates/add', (req, res) => {
+app.post('/admin/poll-templates/add', async (req, res) => {
     const { password, question, reponses } = req.body;
     if (password !== ADMIN_PASSWORD) {
         return res.status(401).send({ error: 'Mot de passe incorrect.' });
@@ -276,7 +308,7 @@ app.post('/admin/poll-templates/add', (req, res) => {
         return res.status(400).send({ error: 'Question et au moins 2 réponses requises.' });
     }
 
-    const templates = loadTemplates();
+    const templates = templatesCache;
 
     // Vérifier qu'un template identique n'existe pas déjà
     const duplicate = templates.some(t =>
@@ -295,7 +327,7 @@ app.post('/admin/poll-templates/add', (req, res) => {
 
     templates.push(newTemplate);
 
-    if (!saveTemplates(templates)) {
+    if (!await saveTemplates(templates)) {
         return res.status(500).send({ error: 'Erreur lors de la sauvegarde.' });
     }
 
@@ -304,7 +336,7 @@ app.post('/admin/poll-templates/add', (req, res) => {
 });
 
 // Supprimer un template
-app.post('/admin/poll-templates/delete', (req, res) => {
+app.post('/admin/poll-templates/delete', async (req, res) => {
     const { password, id } = req.body;
     if (password !== ADMIN_PASSWORD) {
         return res.status(401).send({ error: 'Mot de passe incorrect.' });
@@ -313,7 +345,7 @@ app.post('/admin/poll-templates/delete', (req, res) => {
         return res.status(400).send({ error: 'ID du template requis.' });
     }
 
-    let templates = loadTemplates();
+    let templates = templatesCache;
     const before = templates.length;
     templates = templates.filter(t => t.id !== id);
 
@@ -321,7 +353,7 @@ app.post('/admin/poll-templates/delete', (req, res) => {
         return res.status(404).send({ error: 'Template introuvable.' });
     }
 
-    if (!saveTemplates(templates)) {
+    if (!await saveTemplates(templates)) {
         return res.status(500).send({ error: 'Erreur lors de la sauvegarde.' });
     }
 
@@ -330,6 +362,59 @@ app.post('/admin/poll-templates/delete', (req, res) => {
 });
 
 // ─────────────────────────────────────────
-server.listen(PORT, () => {
-    console.log(`Serveur démarré sur http://localhost:${PORT}`);
+//  TWEETS
+// ─────────────────────────────────────────
+
+// Récupérer le tweet existant d'un pseudo (pour préremplir la page)
+app.get('/tweet/:pseudo', (req, res) => {
+    const pseudo = String(req.params.pseudo || '').trim();
+    if (!pseudo) return res.status(400).send({ error: 'Pseudo requis.' });
+
+    const tweet = tweetsCache.find(
+        t => t.pseudo.toLowerCase() === pseudo.toLowerCase()
+    );
+    res.send({ tweet: tweet || null });
 });
+
+// Poster ou mettre à jour son tweet
+app.post('/tweet', async (req, res) => {
+    const { pseudo, text } = req.body;
+
+    const trimmedPseudo = String(pseudo || '').trim().slice(0, 32);
+    const trimmedText = String(text || '').trim().slice(0, 160);
+
+    if (!trimmedPseudo) return res.status(400).send({ error: 'Pseudo requis.' });
+    if (!trimmedText) return res.status(400).send({ error: 'Le tweet ne peut pas être vide.' });
+
+    const tweet = {
+        pseudo: trimmedPseudo,
+        text: trimmedText,
+        timestamp: Date.now()
+    };
+
+    const existingIndex = tweetsCache.findIndex(
+        t => t.pseudo.toLowerCase() === trimmedPseudo.toLowerCase()
+    );
+
+    if (existingIndex >= 0) {
+        tweetsCache[existingIndex] = tweet;
+    } else {
+        tweetsCache.push(tweet);
+    }
+
+    if (!await saveTweets(tweetsCache)) {
+        return res.status(500).send({ error: 'Erreur lors de la sauvegarde.' });
+    }
+
+    console.log(`Tweet de ${trimmedPseudo} : "${trimmedText}"`);
+    res.send({ success: true, tweet });
+});
+
+// ─────────────────────────────────────────
+(async () => {
+    await loadTemplates();
+    await loadTweets();
+    server.listen(PORT, () => {
+        console.log(`Serveur démarré sur http://localhost:${PORT}`);
+    });
+})();

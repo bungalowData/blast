@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ton tweet</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap');
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-primary: #313338;
+            --bg-secondary: #2b2d31;
+            --bg-tertiary: #1e1f22;
+            --bg-input: #383a40;
+            --text-primary: #dbdee1;
+            --text-secondary: #b5bac1;
+            --text-muted: #80848e;
+            --accent: #5865f2;
+            --accent-hover: #4752c4;
+            --green: #23a55a;
+            --red: #f23f43;
+            --border: rgba(255,255,255,0.06);
+            --shadow: 0 4px 24px rgba(0,0,0,0.4);
+            --radius: 8px;
+            --font: 'Noto Sans', 'Segoe UI', system-ui, sans-serif;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+            background: var(--bg-primary);
+            font-family: var(--font);
+            color: var(--text-primary);
+        }
+
+        /* ── Layout ── */
+        #app {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            width: 100%;
+        }
+
+        /* ── Header ── */
+        #header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 16px;
+            height: 48px;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            user-select: none;
+        }
+        #header .title-icon {
+            font-size: 20px;
+            line-height: 1;
+        }
+        #header .channel-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        #header a.back-link {
+            margin-left: auto;
+            font-size: 13px;
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.15s;
+        }
+        #header a.back-link:hover { color: var(--text-primary); }
+
+        /* ── Content ── */
+        #content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 32px 16px;
+        }
+        #tweet-card {
+            width: 100%;
+            max-width: 480px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+        }
+        #tweet-card h2 {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        #tweet-card p.subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 18px;
+        }
+        #tweet-input {
+            width: 100%;
+            min-height: 110px;
+            resize: vertical;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            color: var(--text-primary);
+            font-size: 15px;
+            font-family: var(--font);
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        #tweet-input:focus { border-color: var(--accent); }
+
+        #char-counter {
+            margin: 8px 0 18px;
+            text-align: right;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        #char-counter.warning { color: var(--red); }
+
+        #post-tweet-btn {
+            width: 100%;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: var(--font);
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+        #post-tweet-btn:hover { background: var(--accent-hover); }
+        #post-tweet-btn:active { transform: scale(0.98); }
+        #post-tweet-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        #status-msg {
+            margin-top: 14px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        /* ── Nickname modal (repris de chat.html) ── */
+        #nickname-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        #nickname-modal {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 32px 28px;
+            width: 380px;
+            max-width: 92vw;
+            box-shadow: var(--shadow);
+            animation: slideUp 0.25s ease;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to   { transform: translateY(0);    opacity: 1; }
+        }
+        #nickname-modal h2 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        #nickname-modal p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+        #nickname-modal label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        #nickname-input {
+            width: 100%;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: var(--text-primary);
+            font-size: 16px;
+            font-family: var(--font);
+            outline: none;
+            transition: border-color 0.15s;
+            margin-bottom: 16px;
+        }
+        #nickname-input:focus { border-color: var(--accent); }
+        #nickname-submit {
+            width: 100%;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: var(--font);
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+        #nickname-submit:hover { background: var(--accent-hover); }
+        #nickname-submit:active { transform: scale(0.98); }
+
+        /* ── Toast ── */
+        #toast {
+            position: fixed; bottom: 24px; left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 12px 20px;
+            font-size: 14px; font-weight: 500; box-shadow: var(--shadow);
+            transition: transform 0.3s ease; white-space: nowrap; z-index: 999;
+        }
+        #toast.success { border-color: var(--green); color: var(--green); }
+        #toast.error   { border-color: var(--red);   color: var(--red); }
+        #toast.show    { transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body>
+
+<!-- Nickname modal -->
+<div id="nickname-overlay">
+    <div id="nickname-modal">
+        <h2>Bienvenue 👋</h2>
+        <p>Choisis un pseudo pour rédiger ton tweet.</p>
+        <label for="nickname-input">Pseudo</label>
+        <input id="nickname-input" type="text" placeholder="ex. SuperHero42" maxlength="32" autocomplete="off" />
+        <button id="nickname-submit">Continuer</button>
+    </div>
+</div>
+
+<div id="app">
+    <div id="header">
+        <span class="title-icon">✍️</span>
+        <span class="channel-name">Ton tweet</span>
+        <a class="back-link" href="chat.html">← Retour au chat</a>
+    </div>
+
+    <div id="content">
+        <div id="tweet-card">
+            <h2>Rédige ton tweet</h2>
+            <p class="subtitle">160 caractères maximum. Tu peux le modifier tant que tu veux, seule la dernière version est conservée.</p>
+            <textarea id="tweet-input" maxlength="160" placeholder="Quoi de neuf ?"></textarea>
+            <div id="char-counter">0 / 160</div>
+            <button id="post-tweet-btn">Poster</button>
+            <div id="status-msg"></div>
+        </div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+    const SERVER = 'https://blast-mg48.onrender.com';
+    let myNickname = localStorage.getItem('blast_nickname');
+
+    // ── Toast ──
+    function showToast(msg, type = 'success') {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = type + ' show';
+        setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // ── Nickname modal ──
+    function submitNickname() {
+        const val = document.getElementById('nickname-input').value.trim();
+        if (!val) return;
+        myNickname = val;
+        localStorage.setItem('blast_nickname', val);
+        document.getElementById('nickname-overlay').style.display = 'none';
+        loadExistingTweet();
+    }
+
+    document.getElementById('nickname-submit').addEventListener('click', submitNickname);
+    document.getElementById('nickname-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') submitNickname();
+    });
+
+    if (myNickname) {
+        document.getElementById('nickname-overlay').style.display = 'none';
+    } else {
+        document.getElementById('nickname-overlay').style.display = 'flex';
+    }
+
+    // ── Compteur de caractères ──
+    const input = document.getElementById('tweet-input');
+    const counter = document.getElementById('char-counter');
+
+    function updateCounter() {
+        const len = input.value.length;
+        counter.textContent = `${len} / 160`;
+        counter.classList.toggle('warning', len >= 150);
+    }
+    input.addEventListener('input', updateCounter);
+
+    // ── Charger un tweet existant ──
+    async function loadExistingTweet() {
+        if (!myNickname) return;
+        try {
+            const res = await fetch(`${SERVER}/tweet/${encodeURIComponent(myNickname)}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data.tweet) {
+                input.value = data.tweet.text;
+                updateCounter();
+                document.getElementById('post-tweet-btn').textContent = 'Mettre à jour';
+                document.getElementById('status-msg').textContent = 'Tu as déjà posté un tweet, tu peux le modifier.';
+            }
+        } catch (e) {
+            console.warn('Erreur chargement du tweet:', e);
+        }
+    }
+
+    // ── Poster / mettre à jour ──
+    document.getElementById('post-tweet-btn').addEventListener('click', async () => {
+        if (!myNickname) return;
+        const text = input.value.trim();
+        if (!text) {
+            showToast('Le tweet ne peut pas être vide.', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('post-tweet-btn');
+        btn.disabled = true;
+
+        try {
+            const res = await fetch(`${SERVER}/tweet`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pseudo: myNickname, text }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                showToast(data.error || 'Erreur lors de l\'envoi.', 'error');
+            } else {
+                showToast('✅ Tweet enregistré !');
+                btn.textContent = 'Mettre à jour';
+                document.getElementById('status-msg').textContent = 'Tu as déjà posté un tweet, tu peux le modifier.';
+            }
+        } catch (e) {
+            showToast('Impossible de joindre le serveur.', 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    updateCounter();
+    loadExistingTweet();
+</script>
+</body>
+</html>

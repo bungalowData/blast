@@ -79,6 +79,15 @@
             font-size: 13px;
             color: var(--text-muted);
         }
+        #tweet-link {
+            font-size: 18px;
+            text-decoration: none;
+            line-height: 1;
+            opacity: 0.85;
+            transition: opacity 0.15s;
+        }
+        #tweet-link:hover { opacity: 1; }
+
         #online-badge {
             margin-left: auto;
             display: flex;
@@ -455,6 +464,7 @@
 
 <div id="app">
     <div id="header">
+        <a id="tweet-link" href="tweet.html" title="Rédiger ton tweet">✍️</a>
         <div id="online-badge"><span class="dot"></span><span id="online-count">0 en ligne</span></div>
     </div>
 
@@ -709,6 +719,7 @@
         document.getElementById('nickname-submit').textContent = 'Connexion…';
         myNickname = val;
         myColor = getColorClass(val);
+        localStorage.setItem('blast_nickname', val);
         socket.emit('join', { nickname: val });
 
         // Fallback : si le serveur ne connaît pas encore l'événement 'join'
@@ -717,6 +728,12 @@
             console.warn('Pas de réponse join_success — entrée en mode dégradé');
             joinSuccess();
         }, 1500);
+    }
+
+    // Préremplir le pseudo si déjà choisi précédemment (ex. depuis tweet.html)
+    const savedNickname = localStorage.getItem('blast_nickname');
+    if (savedNickname) {
+        document.getElementById('nickname-input').value = savedNickname;
     }
 
     document.getElementById('nickname-submit').addEventListener('click', submitNickname);
