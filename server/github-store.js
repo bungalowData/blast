@@ -45,23 +45,22 @@ function enqueue(filePath, task) {
 
 async function githubRequest(method, filePath, body) {
     const url = `${API_BASE}/repos/${GITHUB_DATA_REPO}/contents/${encodeURIComponent(filePath)}`;
+    const headers = {
+        Authorization: `Bearer ${GITHUB_TOKEN}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'blast-server',
+    };
+    if (body) headers['Content-Type'] = 'application/json';
     const res = await fetch(url, {
         method,
-        headers: {
-            Authorization: `Bearer ${GITHUB_TOKEN}`,
-            Accept: 'application/vnd.github+json',
-            'Content-Type': 'application/json',
-            'User-Agent': 'blast-server',
-            'Cache-Control': 'no-cache',
-        },
-        cache: 'no-store',
+        headers,
         body: body ? JSON.stringify(body) : undefined,
     });
     return res;
 }
 
 async function fetchFile(filePath) {
-    const res = await githubRequest('GET', `${filePath}?ref=${encodeURIComponent(GITHUB_DATA_BRANCH)}&_=${Date.now()}`);
+    const res = await githubRequest('GET', `${filePath}?ref=${encodeURIComponent(GITHUB_DATA_BRANCH)}`);
     if (res.status === 404) {
         const requestId = res.headers.get('x-github-request-id');
         const cacheStatus = res.headers.get('x-cache') || res.headers.get('cf-cache-status');
