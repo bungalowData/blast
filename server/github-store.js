@@ -49,9 +49,17 @@ function enqueue(filePath, task) {
 // fetch supprime l'en-tête Authorization lors de redirections cross-origin,
 // ce qui peut transformer une requête authentifiée en requête anonyme (→ 404
 // sur un repo privé). https.request n'a pas ce comportement.
-function githubRequest(method, filePath, body) {
+function githubRequest(method, filePath, { body, query } = {}) {
     return new Promise((resolve, reject) => {
-        const url = new URL(`${API_BASE}/repos/${GITHUB_DATA_REPO}/contents/${encodeURIComponent(filePath).replace(/%2F/g, '/')}`);
+        // Encoder uniquement le chemin du fichier (en préservant les éventuels
+        // séparateurs de dossier), JAMAIS la query string : sinon le "?ref=..."
+        // serait encodé en "%3Fref%3D..." et GitHub renverrait 404.
+        const encodedPath = filePath
+            .split('/')
+            .map(encodeURIComponent)
+            .join('/');
+        const search = query ? `?${query}` : '';
+        const url = new URL(`${API_BASE}/repos/${GITHUB_DATA_REPO}/contents/${encodedPath}${search}`);
         const payload = body ? JSON.stringify(body) : undefined;
 
         const headers = {
@@ -93,7 +101,9 @@ function githubRequest(method, filePath, body) {
 }
 
 async function fetchFile(filePath) {
-    const res = await githubRequest('GET', `${filePath}?ref=${encodeURIComponent(GITHUB_DATA_BRANCH)}`);
+    const res = await githubRequest('GET', filePath, {
+        query: `ref=${encodeURIComponent(GITHUB_DATA_BRANCH)}`,
+    });
     if (res.status === 404) {
         const requestId = res.headers.get('x-github-request-id');
         const cacheStatus = res.headers.get('x-cache') || res.headers.get('cf-cache-status');
@@ -146,7 +156,7 @@ async function doWrite(filePath, data, message, retried = false) {
         };
         if (sha) body.sha = sha;
 
-        const res = await githubRequest('PUT', filePath, body);
+        const res = await githubRequest('PUT', filePath, { body });
 
         if ((res.status === 409 || res.status === 422) && !retried) {
             // Conflit de sha (409) ou sha manquant/obsolète (422) :
