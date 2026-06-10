@@ -9,6 +9,8 @@ const GITHUB_TOKEN = (process.env.GITHUB_TOKEN || '').trim() || undefined;
 const GITHUB_DATA_REPO = (process.env.GITHUB_DATA_REPO || '').trim() || undefined; // ex: "bungalowData/blast-data"
 const GITHUB_DATA_BRANCH = (process.env.GITHUB_DATA_BRANCH || '').trim() || 'main';
 
+const https = require('https');
+
 const API_BASE = 'https://api.github.com';
 
 let warned = false;
@@ -43,20 +45,51 @@ function enqueue(filePath, task) {
     return next;
 }
 
-async function githubRequest(method, filePath, body) {
-    const url = `${API_BASE}/repos/${GITHUB_DATA_REPO}/contents/${encodeURIComponent(filePath)}`;
-    const headers = {
-        Authorization: `Bearer ${GITHUB_TOKEN}`,
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'blast-server',
-    };
-    if (body) headers['Content-Type'] = 'application/json';
-    const res = await fetch(url, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined,
+// Implémentation via le module https natif (et non fetch/undici) :
+// fetch supprime l'en-tête Authorization lors de redirections cross-origin,
+// ce qui peut transformer une requête authentifiée en requête anonyme (→ 404
+// sur un repo privé). https.request n'a pas ce comportement.
+function githubRequest(method, filePath, body) {
+    return new Promise((resolve, reject) => {
+        const url = new URL(`${API_BASE}/repos/${GITHUB_DATA_REPO}/contents/${encodeURIComponent(filePath).replace(/%2F/g, '/')}`);
+        const payload = body ? JSON.stringify(body) : undefined;
+
+        const headers = {
+            Authorization: `Bearer ${GITHUB_TOKEN}`,
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'blast-server',
+        };
+        if (payload) {
+            headers['Content-Type'] = 'application/json';
+            headers['Content-Length'] = Buffer.byteLength(payload);
+        }
+
+        const req = https.request({
+            hostname: url.hostname,
+            path: url.pathname + url.search,
+            method,
+            headers,
+        }, (res) => {
+            const chunks = [];
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => {
+                const text = Buffer.concat(chunks).toString('utf8');
+                resolve({
+                    status: res.statusCode,
+                    ok: res.statusCode >= 200 && res.statusCode < 300,
+                    headers: {
+                        get: (name) => res.headers[name.toLowerCase()] || null,
+                    },
+                    text: async () => text,
+                    json: async () => JSON.parse(text),
+                });
+            });
+        });
+
+        req.on('error', reject);
+        if (payload) req.write(payload);
+        req.end();
     });
-    return res;
 }
 
 async function fetchFile(filePath) {
