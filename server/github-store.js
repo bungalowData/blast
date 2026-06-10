@@ -3,9 +3,11 @@
 //  (contourne le disque éphémère de Render)
 // ─────────────────────────────────────────
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const GITHUB_DATA_REPO = process.env.GITHUB_DATA_REPO; // ex: "bungalowData/blast-data"
-const GITHUB_DATA_BRANCH = process.env.GITHUB_DATA_BRANCH || 'main';
+// .trim() pour ignorer les espaces/retours à la ligne parasites
+// parfois introduits en collant des valeurs dans les champs d'env Render
+const GITHUB_TOKEN = (process.env.GITHUB_TOKEN || '').trim() || undefined;
+const GITHUB_DATA_REPO = (process.env.GITHUB_DATA_REPO || '').trim() || undefined; // ex: "bungalowData/blast-data"
+const GITHUB_DATA_BRANCH = (process.env.GITHUB_DATA_BRANCH || '').trim() || 'main';
 
 const API_BASE = 'https://api.github.com';
 
