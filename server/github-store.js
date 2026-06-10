@@ -52,16 +52,21 @@ async function githubRequest(method, filePath, body) {
             Accept: 'application/vnd.github+json',
             'Content-Type': 'application/json',
             'User-Agent': 'blast-server',
+            'Cache-Control': 'no-cache',
         },
+        cache: 'no-store',
         body: body ? JSON.stringify(body) : undefined,
     });
     return res;
 }
 
 async function fetchFile(filePath) {
-    const res = await githubRequest('GET', `${filePath}?ref=${encodeURIComponent(GITHUB_DATA_BRANCH)}`);
+    const res = await githubRequest('GET', `${filePath}?ref=${encodeURIComponent(GITHUB_DATA_BRANCH)}&_=${Date.now()}`);
     if (res.status === 404) {
-        console.warn(`[github-store] ${filePath} introuvable sur ${GITHUB_DATA_REPO}@${GITHUB_DATA_BRANCH} (404) — vérifie le chemin/la branche.`);
+        const requestId = res.headers.get('x-github-request-id');
+        const cacheStatus = res.headers.get('x-cache') || res.headers.get('cf-cache-status');
+        const bodyText = await res.text().catch(() => '');
+        console.warn(`[github-store] ${filePath} introuvable sur ${GITHUB_DATA_REPO}@${GITHUB_DATA_BRANCH} (404) — vérifie le chemin/la branche. [request-id=${requestId} cache=${cacheStatus}] body=${bodyText}`);
         shaCache.set(filePath, null);
         return null;
     }
