@@ -51,6 +51,7 @@ async function githubRequest(method, filePath, body) {
 async function fetchFile(filePath) {
     const res = await githubRequest('GET', `${filePath}?ref=${encodeURIComponent(GITHUB_DATA_BRANCH)}`);
     if (res.status === 404) {
+        console.warn(`[github-store] ${filePath} introuvable sur ${GITHUB_DATA_REPO}@${GITHUB_DATA_BRANCH} (404) — vérifie le chemin/la branche.`);
         shaCache.set(filePath, null);
         return null;
     }
@@ -100,8 +101,9 @@ async function doWrite(filePath, data, message, retried = false) {
 
         const res = await githubRequest('PUT', filePath, body);
 
-        if (res.status === 409 && !retried) {
-            // Conflit de sha : on récupère le sha à jour et on retente une fois
+        if ((res.status === 409 || res.status === 422) && !retried) {
+            // Conflit de sha (409) ou sha manquant/obsolète (422) :
+            // on récupère le sha à jour et on retente une fois
             await fetchFile(filePath);
             return doWrite(filePath, data, message, true);
         }
