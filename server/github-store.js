@@ -20,6 +20,14 @@ function isConfigured() {
     return Boolean(GITHUB_TOKEN && GITHUB_DATA_REPO);
 }
 
+// Log de diagnostic au démarrage (n'affiche jamais le token complet)
+if (isConfigured()) {
+    const tokenPreview = `${GITHUB_TOKEN.slice(0, 8)}…(${GITHUB_TOKEN.length} car.)`;
+    console.log(`[github-store] Configuré : repo="${GITHUB_DATA_REPO}" branche="${GITHUB_DATA_BRANCH}" token=${tokenPreview}`);
+} else {
+    console.warn('[github-store] Non configuré au démarrage : GITHUB_TOKEN et/ou GITHUB_DATA_REPO absents.');
+}
+
 // sha courant connu pour chaque fichier (nécessaire pour les écritures)
 const shaCache = new Map();
 
