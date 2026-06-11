@@ -539,9 +539,14 @@
 
     // ── Nickname taken ──
     socket.on('nickname_taken', () => {
+        // Annuler l'éventuelle entrée automatique en mode dégradé
+        clearTimeout(joinTimeout);
+        // Réafficher la modale (utile si on avait tenté une connexion auto)
+        document.getElementById('nickname-overlay').style.display = 'flex';
         document.getElementById('nickname-error').style.display = 'block';
         document.getElementById('nickname-submit').disabled = false;
         document.getElementById('nickname-submit').textContent = 'Rejoindre le chat';
+        document.getElementById('nickname-input').focus();
     });
 
     // ── Join success ──
@@ -711,9 +716,7 @@
         document.getElementById('message-input').focus();
     }
 
-    function submitNickname() {
-        const val = document.getElementById('nickname-input').value.trim();
-        if (!val) return;
+    function doJoin(val) {
         document.getElementById('nickname-error').style.display = 'none';
         document.getElementById('nickname-submit').disabled = true;
         document.getElementById('nickname-submit').textContent = 'Connexion…';
@@ -730,10 +733,20 @@
         }, 1500);
     }
 
-    // Préremplir le pseudo si déjà choisi précédemment (ex. depuis tweet.html)
+    function submitNickname() {
+        const val = document.getElementById('nickname-input').value.trim();
+        if (!val) return;
+        doJoin(val);
+    }
+
+    // Réutiliser le pseudo déjà choisi (ex. au retour depuis tweet.html) :
+    // connexion automatique sans repasser par la modale. En cas de pseudo
+    // déjà pris, le handler 'nickname_taken' réaffichera la modale.
     const savedNickname = localStorage.getItem('blast_nickname');
     if (savedNickname) {
         document.getElementById('nickname-input').value = savedNickname;
+        document.getElementById('nickname-overlay').style.display = 'none';
+        doJoin(savedNickname);
     }
 
     document.getElementById('nickname-submit').addEventListener('click', submitNickname);
