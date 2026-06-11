@@ -280,6 +280,24 @@
 <div id="toast"></div>
 
 <script>
+    // ── Plein écran au premier tap (Android ; ignoré sur iOS) ──
+    (function () {
+        function requestFs() {
+            try {
+                const doc = (window.top && window.top.document) ? window.top.document : document;
+                if (doc.fullscreenElement) { cleanup(); return; }
+                const el = doc.documentElement;
+                const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+                if (!fn) { cleanup(); return; } // non supporté (iOS) : on n'insiste pas
+                Promise.resolve(fn.call(el)).then(cleanup).catch(() => {});
+            } catch (e) { /* cross-origin / non supporté : on ignore */ }
+        }
+        function cleanup() {
+            window.removeEventListener('pointerdown', requestFs);
+        }
+        window.addEventListener('pointerdown', requestFs);
+    })();
+
     const SERVER = 'https://blast-mg48.onrender.com';
     let myNickname = localStorage.getItem('blast_nickname');
 
