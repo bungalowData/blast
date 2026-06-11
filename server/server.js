@@ -410,6 +410,22 @@ app.post('/tweet', async (req, res) => {
     res.send({ success: true, tweet });
 });
 
+// Vider l'historique des tweets (admin)
+app.post('/admin/clear-tweets', async (req, res) => {
+    const { password } = req.body;
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).send({ error: 'Mot de passe incorrect.' });
+    }
+
+    tweetsCache = [];
+    if (!await saveTweets(tweetsCache)) {
+        return res.status(500).send({ error: 'Erreur lors de la sauvegarde.' });
+    }
+
+    console.log('Historique des tweets vidé par un administrateur');
+    res.send({ success: true, message: 'Tweets supprimés avec succès.' });
+});
+
 // ─────────────────────────────────────────
 (async () => {
     await loadTemplates();

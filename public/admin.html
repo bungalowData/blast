@@ -458,6 +458,17 @@
                 </div>
 
                 <div class="action-card">
+                    <h3>🐦 Vider les tweets</h3>
+                    <p>Supprime tous les tweets rédigés par les visiteurs (stockés sur GitHub). Action irréversible.</p>
+                    <button class="btn btn-danger" id="clear-tweets-btn">Vider les tweets</button>
+                    <div class="confirm-row" id="confirm-tweets-row">
+                        <span>Confirmer la suppression ?</span>
+                        <button class="btn-sm cancel" id="cancel-tweets-btn">Annuler</button>
+                        <button class="btn-sm danger" id="confirm-tweets-btn">Confirmer</button>
+                    </div>
+                </div>
+
+                <div class="action-card">
                     <h3>📳 Vibrer les téléphones</h3>
                     <p>Envoie une vibration sur tous les appareils connectés.</p>
                     <button class="btn btn-primary" id="vibrate-btn">Faire vibrer</button>
@@ -663,6 +674,35 @@
         }
         document.getElementById('confirm-row').classList.remove('visible');
         document.getElementById('clear-btn').style.display = 'block';
+    });
+
+    // ── Clear tweets ──
+    document.getElementById('clear-tweets-btn').addEventListener('click', () => {
+        document.getElementById('confirm-tweets-row').classList.add('visible');
+        document.getElementById('clear-tweets-btn').style.display = 'none';
+    });
+    document.getElementById('cancel-tweets-btn').addEventListener('click', () => {
+        document.getElementById('confirm-tweets-row').classList.remove('visible');
+        document.getElementById('clear-tweets-btn').style.display = 'block';
+    });
+    document.getElementById('confirm-tweets-btn').addEventListener('click', async () => {
+        try {
+            const res = await fetch(`${SERVER}/admin/clear-tweets`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: adminPassword }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('✅ Tweets supprimés avec succès.');
+            } else {
+                showToast(data.error || 'Erreur.', 'error');
+            }
+        } catch (e) {
+            showToast('Impossible de joindre le serveur.', 'error');
+        }
+        document.getElementById('confirm-tweets-row').classList.remove('visible');
+        document.getElementById('clear-tweets-btn').style.display = 'block';
     });
 
     // ── Presets images ──
