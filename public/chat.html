@@ -513,6 +513,38 @@
     socket.on('connect', () => console.log('Socket connecté'));
     socket.on('connect_error', (e) => console.warn('Erreur socket:', e));
 
+    // ── Audio (sons diffusés par l'admin) ──
+    // Les navigateurs bloquent la lecture audio tant qu'il n'y a pas eu
+    // d'interaction utilisateur. On « déverrouille » un lecteur réutilisable
+    // au premier geste (tap / saisie du pseudo), de façon invisible.
+    const soundPlayer = new Audio();
+    soundPlayer.preload = 'auto';
+    let audioUnlocked = false;
+    const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+
+    function unlockAudio() {
+        if (audioUnlocked) return;
+        audioUnlocked = true;
+        soundPlayer.src = SILENT_WAV;
+        soundPlayer.play().then(() => {
+            soundPlayer.pause();
+            soundPlayer.currentTime = 0;
+        }).catch(() => { /* sera retenté au prochain geste si besoin */ audioUnlocked = false; });
+    }
+    window.addEventListener('pointerdown', unlockAudio, { once: false });
+
+    // ── Son diffusé par l'admin ──
+    socket.on('play_sound', ({ soundUrl }) => {
+        if (!soundUrl) return;
+        try {
+            soundPlayer.src = soundUrl;
+            soundPlayer.currentTime = 0;
+            soundPlayer.play().catch(e => console.warn('Lecture audio bloquée:', e));
+        } catch (e) {
+            console.warn('Erreur lecture son:', e);
+        }
+    });
+
     // ── History cleared by admin ──
     socket.on('history_cleared', () => {
         document.getElementById('messages-list').innerHTML = '';
@@ -736,6 +768,7 @@
     function submitNickname() {
         const val = document.getElementById('nickname-input').value.trim();
         if (!val) return;
+        unlockAudio(); // déverrouille l'audio (geste utilisateur fiable)
         doJoin(val);
     }
 

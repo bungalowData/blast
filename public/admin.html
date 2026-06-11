@@ -193,6 +193,27 @@
             font-size: 10px; color: var(--text-muted);
         }
 
+        /* ── Sons ── */
+        .sounds-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        .sound-btn {
+            display: flex; align-items: center; gap: 8px;
+            padding: 12px 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 14px; font-weight: 600; font-family: var(--font);
+            cursor: pointer; text-align: left;
+            transition: border-color 0.15s, background 0.15s, transform 0.1s;
+        }
+        .sound-btn:hover { border-color: var(--accent); background: var(--surface); }
+        .sound-btn:active { transform: scale(0.97); }
+        .sound-btn .sound-icon { font-size: 18px; line-height: 1; }
+
         /* ── Sondage ── */
         .section-title {
             font-size: 11px; font-weight: 700; text-transform: uppercase;
@@ -486,6 +507,12 @@
                     </div>
                 </div>
 
+                <div class="action-card">
+                    <h3>🔊 Diffuser un son</h3>
+                    <p>Cliquez sur un son pour le jouer sur tous les téléphones connectés.</p>
+                    <div class="sounds-grid" id="sounds-grid"></div>
+                </div>
+
                 <button class="logout-btn" id="logout-btn">Se déconnecter</button>
             </div>
 
@@ -739,6 +766,30 @@
                 document.getElementById('image-url-input').value = url;
             });
             grid.appendChild(thumb);
+        });
+    })();
+
+    // ── Sons (soundboard) ──
+    // { label, icon, url } — remplace les URL par tes fichiers MP3 sur le bucket R2.
+    const SOUND_PRESETS = [
+        { label: 'Move your ass', icon: '👏', url: 'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/sounds/moveYourAss.mp3' },
+        { label: 'Buzzer',           icon: '🔔', url: 'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/sounds/buzzer.mp3' },
+        { label: 'Tada',             icon: '🎉', url: 'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/sounds/tada.mp3' },
+        { label: 'Tambour',          icon: '🥁', url: 'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/sounds/drumroll.mp3' },
+    ];
+
+    (function renderSounds() {
+        const grid = document.getElementById('sounds-grid');
+        SOUND_PRESETS.forEach(sound => {
+            if (!sound.url || sound.url.includes('XXXX')) return;
+            const btn = document.createElement('button');
+            btn.className = 'sound-btn';
+            btn.innerHTML = `<span class="sound-icon">${sound.icon || '🔊'}</span><span>${sound.label}</span>`;
+            btn.addEventListener('click', () => {
+                socket.emit('play_sound', { soundUrl: sound.url });
+                showToast(`🔊 ${sound.label} diffusé !`);
+            });
+            grid.appendChild(btn);
         });
     })();
 

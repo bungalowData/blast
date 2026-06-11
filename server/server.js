@@ -156,6 +156,13 @@ io.on('connection', (socket) => {
         console.log('Vibration déclenchée par admin');
     });
 
+    // ── Admin : diffuser un son sur tous les clients ──
+    socket.on('play_sound', ({ soundUrl }) => {
+        if (!soundUrl || typeof soundUrl !== 'string') return;
+        io.emit('play_sound', { soundUrl: soundUrl.trim() });
+        console.log(`Son diffusé : ${soundUrl.trim()}`);
+    });
+
     // ── Admin : afficher image plein écran ──
     socket.on('show_image', ({ imageUrl }) => {
         if (!imageUrl || typeof imageUrl !== 'string') return;
