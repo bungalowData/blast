@@ -156,11 +156,17 @@ io.on('connection', (socket) => {
         console.log('Vibration déclenchée par admin');
     });
 
-    // ── Admin : diffuser un son sur tous les clients ──
+    // ── Admin : diffuser un son sur tous les clients (sauf l'admin émetteur) ──
     socket.on('play_sound', ({ soundUrl }) => {
         if (!soundUrl || typeof soundUrl !== 'string') return;
-        io.emit('play_sound', { soundUrl: soundUrl.trim() });
+        socket.broadcast.emit('play_sound', { soundUrl: soundUrl.trim() });
         console.log(`Son diffusé : ${soundUrl.trim()}`);
+    });
+
+    // ── Admin : stopper la lecture sur tous les clients ──
+    socket.on('stop_sound', () => {
+        socket.broadcast.emit('stop_sound');
+        console.log('Arrêt du son demandé par admin');
     });
 
     // ── Admin : afficher image plein écran ──

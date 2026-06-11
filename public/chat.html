@@ -545,6 +545,14 @@
         }
     });
 
+    // ── Arrêt du son demandé par l'admin ──
+    socket.on('stop_sound', () => {
+        try {
+            soundPlayer.pause();
+            soundPlayer.currentTime = 0;
+        } catch (e) { /* ignore */ }
+    });
+
     // ── History cleared by admin ──
     socket.on('history_cleared', () => {
         document.getElementById('messages-list').innerHTML = '';

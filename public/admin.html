@@ -511,6 +511,7 @@
                     <h3>🔊 Diffuser un son</h3>
                     <p>Cliquez sur un son pour le jouer sur tous les téléphones connectés.</p>
                     <div class="sounds-grid" id="sounds-grid"></div>
+                    <button class="btn btn-danger" id="stop-sound-btn" style="margin-top:10px">⏹ Stopper la lecture</button>
                 </div>
 
                 <button class="logout-btn" id="logout-btn">Se déconnecter</button>
@@ -792,6 +793,11 @@
             grid.appendChild(btn);
         });
     })();
+
+    document.getElementById('stop-sound-btn').addEventListener('click', () => {
+        socket.emit('stop_sound');
+        showToast('⏹ Lecture stoppée.', 'info');
+    });
 
     // ── Vibrer ──
     document.getElementById('vibrate-btn').addEventListener('click', () => {
