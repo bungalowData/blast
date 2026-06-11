@@ -496,24 +496,6 @@
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
 <script>
-    // ── Plein écran au premier tap (Android ; ignoré sur iOS) ──
-    (function () {
-        function requestFs() {
-            try {
-                const doc = (window.top && window.top.document) ? window.top.document : document;
-                if (doc.fullscreenElement) { cleanup(); return; }
-                const el = doc.documentElement;
-                const fn = el.requestFullscreen || el.webkitRequestFullscreen;
-                if (!fn) { cleanup(); return; } // non supporté (iOS) : on n'insiste pas
-                Promise.resolve(fn.call(el)).then(cleanup).catch(() => {});
-            } catch (e) { /* cross-origin / non supporté : on ignore */ }
-        }
-        function cleanup() {
-            window.removeEventListener('pointerdown', requestFs);
-        }
-        window.addEventListener('pointerdown', requestFs);
-    })();
-
     // ── State ──
     let myNickname = null;
     let myColor = null;
