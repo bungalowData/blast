@@ -513,25 +513,52 @@
     socket.on('connect', () => console.log('Socket connecté'));
     socket.on('connect_error', (e) => console.warn('Erreur socket:', e));
 
-    // ── Audio (sons diffusés par l'admin) ──
+    // ── Audio ──
     // Les navigateurs bloquent la lecture audio tant qu'il n'y a pas eu
-    // d'interaction utilisateur. On « déverrouille » un lecteur réutilisable
-    // au premier geste (tap / saisie du pseudo), de façon invisible.
+    // d'interaction utilisateur. On « déverrouille » les lecteurs au premier
+    // geste (tap / saisie du pseudo), de façon invisible.
+    const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+
+    // Lecteur pour les sons diffusés par l'admin
     const soundPlayer = new Audio();
     soundPlayer.preload = 'auto';
+
+    // Lecteurs séparés pour les notifications locales (URLs à renseigner)
+    const NOTIF_RECEIVE_URL = 'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/sons_notifs/receive1.mp3';
+    const NOTIF_SEND_URL    = 'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/sons_notifs/send1.mp3';
+    const notifReceive = new Audio(NOTIF_RECEIVE_URL);
+    const notifSend    = new Audio(NOTIF_SEND_URL);
+    notifReceive.preload = 'auto';
+    notifSend.preload = 'auto';
+
+    const ALL_PLAYERS = [soundPlayer, notifReceive, notifSend];
     let audioUnlocked = false;
-    const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
 
     function unlockAudio() {
         if (audioUnlocked) return;
         audioUnlocked = true;
-        soundPlayer.src = SILENT_WAV;
-        soundPlayer.play().then(() => {
-            soundPlayer.pause();
-            soundPlayer.currentTime = 0;
-        }).catch(() => { /* sera retenté au prochain geste si besoin */ audioUnlocked = false; });
+        // Déverrouille chaque lecteur via une lecture silencieuse instantanée
+        ALL_PLAYERS.forEach(p => {
+            const realSrc = p.src;
+            p.src = SILENT_WAV;
+            p.play().then(() => {
+                p.pause();
+                p.currentTime = 0;
+                if (realSrc && realSrc !== SILENT_WAV) p.src = realSrc; // restaure l'URL préchargée
+            }).catch(() => { audioUnlocked = false; });
+        });
     }
     window.addEventListener('pointerdown', unlockAudio, { once: false });
+
+    // Anti-spam : pas plus d'un son de réception toutes les 300 ms
+    let lastReceiveSoundAt = 0;
+
+    function playNotif(player) {
+        try {
+            player.currentTime = 0;
+            player.play().catch(() => {});
+        } catch (e) { /* ignore */ }
+    }
 
     // ── Son diffusé par l'admin ──
     socket.on('play_sound', ({ soundUrl }) => {
@@ -570,6 +597,17 @@
     // ── New message ──
     socket.on('message', (data) => {
         appendMessage(data, true);
+
+        // Notification sonore (uniquement messages en direct, pas l'historique)
+        if (data.nickname === myNickname) {
+            playNotif(notifSend);
+        } else {
+            const now = Date.now();
+            if (now - lastReceiveSoundAt >= 300) {
+                lastReceiveSoundAt = now;
+                playNotif(notifReceive);
+            }
+        }
     });
 
     // ── User count ──
