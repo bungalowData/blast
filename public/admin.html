@@ -847,8 +847,8 @@
     updateRemoveButtons();
 
     document.getElementById('add-response-btn').addEventListener('click', () => {
-        if (document.querySelectorAll('#responses-list .response-row').length >= 8) {
-            showToast('Maximum 8 réponses.', 'info'); return;
+        if (document.querySelectorAll('#responses-list .response-row').length >= 10) {
+            showToast('Maximum 10 réponses.', 'info'); return;
         }
         responseCount++;
         const row = document.createElement('div');
