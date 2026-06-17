@@ -437,6 +437,68 @@
         #nickname-submit:hover { background: var(--accent-hover); }
         #nickname-submit:active { transform: scale(0.98); }
 
+        /* ── Tutoriel ── */
+        #tutorial-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9998;
+        }
+        #tutorial-overlay.visible { display: flex; }
+        #tutorial-modal {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 32px 28px;
+            width: 420px;
+            max-width: 92vw;
+            box-shadow: var(--shadow);
+            animation: slideUp 0.25s ease;
+        }
+        #tutorial-modal h2 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        #tutorial-modal p {
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            white-space: pre-wrap;
+        }
+        #tutorial-progress {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 20px;
+        }
+        #tutorial-progress .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--bg-tertiary);
+            transition: background 0.2s;
+        }
+        #tutorial-progress .dot.active { background: var(--accent); }
+        #tutorial-next {
+            width: 100%;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: var(--font);
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+        #tutorial-next:hover { background: var(--accent-hover); }
+        #tutorial-next:active { transform: scale(0.98); }
+
         /* Colour palette for avatars */
         .c0 { background: #5865f2; }
         .c1 { background: #eb459e; }
@@ -459,6 +521,16 @@
         <input id="nickname-input" type="text" placeholder="ex. SuperHero42" maxlength="32" autocomplete="off" />
         <div id="nickname-error">Ce pseudo est déjà utilisé, essaie-en un autre.</div>
         <button id="nickname-submit">Rejoindre le chat</button>
+    </div>
+</div>
+
+<!-- Tutoriel (affiché une seule fois après le login) -->
+<div id="tutorial-overlay">
+    <div id="tutorial-modal">
+        <h2 id="tutorial-title"></h2>
+        <p id="tutorial-text"></p>
+        <div id="tutorial-progress"></div>
+        <button id="tutorial-next">Suivant</button>
     </div>
 </div>
 
@@ -834,8 +906,63 @@
     function joinSuccess() {
         clearTimeout(joinTimeout);
         document.getElementById('nickname-overlay').style.display = 'none';
+        if (!startTutorialIfNeeded()) {
+            document.getElementById('message-input').focus();
+        }
+    }
+
+    // ── Tutoriel (affiché une seule fois par appareil) ──
+    // Remplace/complète les textes ci-dessous selon tes besoins.
+    const TUTORIAL_PAGES = [
+        { title: 'Bienvenue dans BLAST 👋', text: 'Voici quelques infos pour bien démarrer.' },
+        { title: 'Comment ça marche', text: 'Ici tu es dans un chat. \nÉcris ton message en bas et appuie sur envoyer.\nTu peux discuter avec nous, et avec les autres spectateurs.' },
+        { title: 'Les regles du jeu', text: 'Tout propos diffamant ou discriminatoire est interdit et entraînera une exclusion par un modérateur.' },
+        { title: 'Les sondages', text: 'Au cours du spectacle, on va régulierement te demander ton avis. Des sondages s\'afficheront ici et tu pourras faire ton choix en cliquant sur une réponse'},
+        { title: 'Le tweet', text: 'Si tu passes tous les niveaux du jeu tu pourras redifer ton propre tweet. On te guidera en temps voulu pour cela ;)' },
+        { title: 'Pret??  C\'est parti !', text: 'Amuse-toi bien.' },
+    ];
+    const TUTORIAL_KEY = 'blast_tutorial_seen';
+    let tutorialIndex = 0;
+
+    function renderTutorialPage() {
+        const page = TUTORIAL_PAGES[tutorialIndex];
+        document.getElementById('tutorial-title').textContent = page.title;
+        document.getElementById('tutorial-text').textContent = page.text;
+
+        const isLast = tutorialIndex === TUTORIAL_PAGES.length - 1;
+        document.getElementById('tutorial-next').textContent = isLast ? 'Commencer' : 'Suivant';
+
+        const progress = document.getElementById('tutorial-progress');
+        progress.innerHTML = '';
+        TUTORIAL_PAGES.forEach((_, i) => {
+            const dot = document.createElement('span');
+            dot.className = 'dot' + (i === tutorialIndex ? ' active' : '');
+            progress.appendChild(dot);
+        });
+    }
+
+    function startTutorialIfNeeded() {
+        if (!TUTORIAL_PAGES.length || localStorage.getItem(TUTORIAL_KEY)) return false;
+        tutorialIndex = 0;
+        renderTutorialPage();
+        document.getElementById('tutorial-overlay').classList.add('visible');
+        return true;
+    }
+
+    function finishTutorial() {
+        localStorage.setItem(TUTORIAL_KEY, '1');
+        document.getElementById('tutorial-overlay').classList.remove('visible');
         document.getElementById('message-input').focus();
     }
+
+    document.getElementById('tutorial-next').addEventListener('click', () => {
+        tutorialIndex++;
+        if (tutorialIndex >= TUTORIAL_PAGES.length) {
+            finishTutorial();
+        } else {
+            renderTutorialPage();
+        }
+    });
 
     function doJoin(val) {
         document.getElementById('nickname-error').style.display = 'none';
