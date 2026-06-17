@@ -380,6 +380,9 @@
                 lastSubmittedText = data.tweet ? data.tweet.text : text;
                 updateButtonLabel();
                 document.getElementById('status-msg').textContent = 'Votre tweet a bien été envoyé !';
+                // Redirection vers le chat après l'envoi
+                setTimeout(() => { window.location.href = 'chat.html'; }, 800);
+                return;
             }
         } catch (e) {
             showToast('Impossible de joindre le serveur.', 'error');
