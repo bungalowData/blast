@@ -534,12 +534,39 @@
     const ALL_PLAYERS = [soundPlayer, notifReceive, notifSend];
     let audioUnlocked = false;
 
+    // ── Web Audio : décode les sons de notif en mémoire pour une lecture
+    //    instantanée depuis le début (corrige le « début coupé » sur iOS). ──
+    let audioCtx = null;
+    const notifBuffers = { receive: null, send: null };
+
+    function decodeInto(key, url) {
+        if (!audioCtx) return;
+        fetch(url)
+            .then(r => r.arrayBuffer())
+            .then(buf => audioCtx.decodeAudioData(buf))
+            .then(decoded => { notifBuffers[key] = decoded; })
+            .catch(e => console.warn(`Web Audio indisponible pour ${key} (repli HTMLAudio):`, e));
+    }
+
+    function initWebAudio() {
+        if (audioCtx) return;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return; // pas de Web Audio → on restera sur HTMLAudio
+        audioCtx = new AC();
+        decodeInto('receive', NOTIF_RECEIVE_URL);
+        decodeInto('send', NOTIF_SEND_URL);
+    }
+
     function unlockAudio() {
         if (audioUnlocked) return;
         audioUnlocked = true;
-        // Déverrouille chaque lecteur en jouant sa PROPRE source (en muet) pendant
-        // le geste utilisateur. On ne change pas la src des lecteurs de notif :
-        // sur iOS, modifier la src après coup re-verrouille la lecture.
+
+        // Initialise + débloque le contexte Web Audio (requis sur iOS)
+        initWebAudio();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+
+        // Déverrouille aussi les HTMLAudioElement (repli + son admin) en jouant
+        // leur propre source en muet pendant le geste utilisateur.
         ALL_PLAYERS.forEach(p => {
             if (!p.src) p.src = SILENT_WAV; // le lecteur admin n'a pas encore d'URL
             p.muted = true;
@@ -558,10 +585,21 @@
     // Anti-spam : pas plus d'un son de réception toutes les 300 ms
     let lastReceiveSoundAt = 0;
 
-    function playNotif(player) {
+    // Joue une notif : Web Audio si le buffer est décodé, sinon repli HTMLAudio.
+    function playNotif(key, fallbackPlayer) {
+        if (audioCtx && notifBuffers[key]) {
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const src = audioCtx.createBufferSource();
+                src.buffer = notifBuffers[key];
+                src.connect(audioCtx.destination);
+                src.start(0);
+                return;
+            } catch (e) { /* repli ci-dessous */ }
+        }
         try {
-            player.currentTime = 0;
-            player.play().catch(() => {});
+            fallbackPlayer.currentTime = 0;
+            fallbackPlayer.play().catch(() => {});
         } catch (e) { /* ignore */ }
     }
 
@@ -605,12 +643,12 @@
 
         // Notification sonore (uniquement messages en direct, pas l'historique)
         if (data.nickname === myNickname) {
-            playNotif(notifSend);
+            playNotif('send', notifSend);
         } else {
             const now = Date.now();
             if (now - lastReceiveSoundAt >= 300) {
                 lastReceiveSoundAt = now;
-                playNotif(notifReceive);
+                playNotif('receive', notifReceive);
             }
         }
     });
