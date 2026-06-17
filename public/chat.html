@@ -537,15 +537,20 @@
     function unlockAudio() {
         if (audioUnlocked) return;
         audioUnlocked = true;
-        // Déverrouille chaque lecteur via une lecture silencieuse instantanée
+        // Déverrouille chaque lecteur en jouant sa PROPRE source (en muet) pendant
+        // le geste utilisateur. On ne change pas la src des lecteurs de notif :
+        // sur iOS, modifier la src après coup re-verrouille la lecture.
         ALL_PLAYERS.forEach(p => {
-            const realSrc = p.src;
-            p.src = SILENT_WAV;
-            p.play().then(() => {
+            if (!p.src) p.src = SILENT_WAV; // le lecteur admin n'a pas encore d'URL
+            p.muted = true;
+            Promise.resolve(p.play()).then(() => {
                 p.pause();
                 p.currentTime = 0;
-                if (realSrc && realSrc !== SILENT_WAV) p.src = realSrc; // restaure l'URL préchargée
-            }).catch(() => { audioUnlocked = false; });
+                p.muted = false;
+            }).catch(() => {
+                p.muted = false;
+                audioUnlocked = false;
+            });
         });
     }
     window.addEventListener('pointerdown', unlockAudio, { once: false });
