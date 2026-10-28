@@ -558,6 +558,12 @@
                         <button class="btn btn-primary" id="light-flash-btn">Flash</button>
                         <button class="btn btn-danger" id="light-off-btn">Éteindre</button>
                     </div>
+                    <p style="margin:12px 0 8px">Les téléphones gardent leur caméra fermée pour ménager la batterie. Arme les flashs quelques secondes avant de t'en servir ; sans lumière pendant 10 min, ils se désarment seuls. Une lumière avec lampe arme d'elle-même (avec un peu de retard).</p>
+                    <div class="btn-row">
+                        <button class="btn btn-success" id="torch-arm-btn">🔦 Armer les flashs</button>
+                        <button class="btn btn-outline" id="torch-disarm-btn">Désarmer</button>
+                    </div>
+                    <div id="torch-status" style="font-size:13px;color:var(--text-muted);margin-top:8px">Lampes : —</div>
                 </div>
 
                 <div class="action-card">
@@ -690,6 +696,19 @@
         if (s.refused) showToast(`Commande refusée (${s.refused}) : reconnecte-toi.`, 'error');
     });
     socket.on('disconnect', () => setAdminBadge(null));
+
+    // ── Lampes torches : armement et compte ──
+    let torchInfo = { armed: 0, available: 0, armedByRegie: false };
+
+    function renderTorchStatus() {
+        const t = torchInfo;
+        document.getElementById('torch-status').textContent =
+            `Lampes : ${t.armed} prête(s) sur ${t.available} activée(s) · flashs ${t.armedByRegie ? 'ARMÉS' : 'désarmés'}`;
+        document.getElementById('torch-arm-btn').style.opacity = t.armedByRegie ? '.6' : '';
+    }
+
+    socket.on('torch_count', (c) => { torchInfo = { ...torchInfo, ...c }; renderTorchStatus(); });
+    socket.on('torch_arm', (d) => { torchInfo.armedByRegie = !!(d && d.armed); renderTorchStatus(); });
     socket.on('push_result', (r) => {
         if (r.disabled) showToast('Notifications push non configurées sur le serveur.', 'error');
         else showToast(`🔔 ${r.sent} notification(s) envoyée(s)${r.failed ? `, ${r.failed} échec(s)` : ''}.`);
@@ -774,6 +793,7 @@
                 document.getElementById('stat-online').textContent = data.onlineCount;
                 document.getElementById('stat-votes').textContent = data.voteCount ?? '—';
                 document.getElementById('stat-push').textContent = data.pushEnabled ? data.pushCount : 'off';
+                if (data.torch) { torchInfo = data.torch; renderTorchStatus(); }
                 if (data.currentPoll && data.currentPoll.question) {
                     currentPoll = data.currentPoll;
                     document.getElementById('poll-question-display').textContent = data.currentPoll.question;
@@ -965,6 +985,15 @@
     document.getElementById('light-off-btn').addEventListener('click', () => {
         socket.emit('light', { on: false });
         showToast('Lumière éteinte.', 'info');
+    });
+
+    document.getElementById('torch-arm-btn').addEventListener('click', () => {
+        socket.emit('torch_arm', { armed: true });
+        showToast('🔦 Flashs armés : les caméras s\'ouvrent.');
+    });
+    document.getElementById('torch-disarm-btn').addEventListener('click', () => {
+        socket.emit('torch_arm', { armed: false });
+        showToast('Flashs désarmés.', 'info');
     });
 
     // ── Carton ──

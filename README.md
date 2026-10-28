@@ -25,6 +25,7 @@ Pas la branche main!  ;)
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | clés des notifications push, créées une fois : `node server/web-push.js --generate` |
 | `VAPID_SUBJECT` | facultatif, `https://blast.blindsp0t.com` par défaut |
 | `GITHUB_TOKEN`, `GITHUB_DATA_REPO`, `GITHUB_DATA_BRANCH` | stockage persistant (templates, tweets, abonnements push) |
+| `TORCH_ARM_TIMEOUT_MS` | facultatif : désarmement automatique des flashs sans lumière, 10 min par défaut |
 
 Sans clés VAPID, le push est simplement désactivé (le reste marche). Changer les clés invalide
 tous les abonnements existants : les garder une fois créées.
@@ -39,6 +40,21 @@ lit dans la variable d'environnement `BLAST_ADMIN_PASSWORD` du poste de régie.
 
 Le serveur et les pages doivent être déployés **ensemble** : un ancien `admin.html` se verrait
 refuser ses commandes par le nouveau serveur.
+
+## Lampes torches : activer, armer, désarmer
+
+Une lampe torche ne se pilote que caméra ouverte, et une caméra ouverte coûte de la batterie.
+1. Le spectateur **active** la lampe une fois (tuto ou bouton ✨) : le téléphone demande l'accès,
+   retient la caméra qui porte la lampe, puis **referme** la caméra.
+2. La régie **arme** les flashs quelques secondes avant de s'en servir (`admin.html` ou Unity) :
+   les caméras se rouvrent, en basse résolution. Une lumière avec lampe arme d'elle-même, avec
+   environ une seconde de retard pendant laquelle l'écran sert de relais.
+3. **Désarmement** par la régie, automatiquement après 10 min sans lumière, ou pour un téléphone
+   qui passe en arrière-plan (il se réarme à son retour).
+
+La régie voit « Lampes : N prêtes sur M activées ». Si un navigateur redemanderait l'accès
+(Chrome « cette fois uniquement », Safari après rechargement), la caméra n'est pas rouverte de
+force : un bouton « Réactiver la lampe » apparaît sur le téléphone.
 
 ## Tester en local
 

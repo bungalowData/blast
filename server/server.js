@@ -243,6 +243,52 @@ let currentImage = null;
 let currentCarton = null;
 let currentLight = null;
 
+// ── Armement des lampes torches ──
+// Une lampe n'est pilotable que caméra ouverte, et une caméra ouverte vide la
+// batterie. Les téléphones la gardent donc fermée, et ne l'ouvrent que quand
+// la régie « arme » les flashs, quelques secondes avant de s'en servir.
+// Une lumière qui demande la lampe arme d'elle-même. Sans commande de lumière
+// pendant TORCH_ARM_TIMEOUT_MS, le serveur désarme : une régie qui oublie ne
+// doit pas laisser des centaines de caméras ouvertes.
+const TORCH_ARM_TIMEOUT_MS = Number(process.env.TORCH_ARM_TIMEOUT_MS) || 10 * 60 * 1000;
+let torchArmed = false;
+let torchDisarmTimer = null;
+
+function setTorchArmed(armed, reason) {
+    clearTimeout(torchDisarmTimer);
+    torchDisarmTimer = armed
+        ? setTimeout(() => setTorchArmed(false, 'désarmement automatique, aucune lumière depuis ' +
+            Math.round(TORCH_ARM_TIMEOUT_MS / 60000) + ' min'), TORCH_ARM_TIMEOUT_MS)
+        : null;
+    if (armed === torchArmed) return;
+    torchArmed = armed;
+    io.emit('torch_arm', { armed });
+    console.log(`Flashs ${armed ? 'armés' : 'désarmés'}${reason ? ` (${reason})` : ''}`);
+}
+
+// Chaque téléphone dit où en est sa lampe : 'armed' (caméra ouverte),
+// 'standby' (activée par le spectateur, caméra fermée) ou 'none'. Purement
+// indicatif pour la régie : un compte, recalculé au plus deux fois par seconde.
+const TORCH_STATES = ['armed', 'standby', 'none'];
+let torchCountTimer = null;
+
+function torchCounts() {
+    let armed = 0, available = 0;
+    for (const s of io.of('/').sockets.values()) {
+        if (s.data.torch === 'armed') { armed++; available++; }
+        else if (s.data.torch === 'standby') available++;
+    }
+    return { armed, available, armedByRegie: torchArmed };
+}
+
+function scheduleTorchCount() {
+    if (torchCountTimer) return;
+    torchCountTimer = setTimeout(() => {
+        torchCountTimer = null;
+        io.to('admins').emit('torch_count', torchCounts());
+    }, 500);
+}
+
 function cleanText(v, max) {
     return typeof v === 'string' ? v.trim().slice(0, max) : '';
 }
@@ -385,11 +431,24 @@ io.on('connection', (socket) => {
         socket.emit('admin_status', { admin: socket.data.admin });
         console.log(socket.data.admin ? `Régie connectée : ${socket.id}` : `Mot de passe régie refusé : ${socket.id}`);
     }
+    if (socket.data.admin) {
+        socket.join('admins');
+        socket.emit('torch_count', torchCounts());
+    }
 
-    // ── Rattraper l'état en cours (image, carton, lumière) ──
+    // ── Rattraper l'état en cours (image, carton, lumière, armement) ──
     if (currentImage) socket.emit('show_image', { imageUrl: currentImage });
     if (currentCarton) socket.emit('show_carton', currentCarton);
+    if (torchArmed) socket.emit('torch_arm', { armed: true });
     if (currentLight) socket.emit('light', currentLight);
+
+    // ── Téléphone : état de sa lampe torche ──
+    socket.on('torch_state', (data) => {
+        const state = data && TORCH_STATES.includes(data.state) ? data.state : 'none';
+        if (socket.data.torch === state) return;
+        socket.data.torch = state;
+        scheduleTorchCount();
+    });
 
     // ── Sondage ──
     onAdmin(socket, 'demander_sondage', () => {
@@ -476,9 +535,20 @@ io.on('connection', (socket) => {
         // Un flash est un événement, pas un état : un retardataire ne doit pas
         // recevoir un flash fini depuis longtemps.
         currentLight = light.on && !light.flash ? light : (light.on ? currentLight : null);
+        // La lampe demandée : on arme (les téléphones ouvrent leur caméra). Toute
+        // commande de lumière repousse aussi le désarmement automatique.
+        if (light.on && light.mode !== 'screen') setTorchArmed(true, 'lumière avec lampe');
+        else if (torchArmed) setTorchArmed(true);
         io.emit('light', light);
         vibrateIfAsked(data);
         console.log(`Lumière : ${light.on ? `${light.mode} ${light.color}${light.flash ? ` flash ${light.flash} ms` : ''}${light.strobe ? ` strobe ${light.strobe} Hz` : ''}` : 'éteinte'}`);
+    });
+
+    // ── Admin : armer / désarmer les lampes torches ──
+    onAdmin(socket, 'torch_arm', (data) => {
+        setTorchArmed(Boolean(data.armed), 'régie');
+        // Réponse même sans changement : la régie qui insiste voit l'état
+        socket.emit('torch_arm', { armed: torchArmed });
     });
 
     // ── Admin : notification push à tous les abonnés ──
@@ -555,6 +625,7 @@ io.on('connection', (socket) => {
 
     // ── Déconnexion ──
     socket.on('disconnect', () => {
+        if (socket.data.torch && socket.data.torch !== 'none') scheduleTorchCount();
         const nickname = connectedUsers.get(socket.id);
         if (nickname) {
             connectedUsers.delete(socket.id);
@@ -602,6 +673,7 @@ app.post('/admin/stats', (req, res) => {
         currentImage,
         currentCarton,
         currentLight,
+        torch: torchCounts(),
     });
 });
 

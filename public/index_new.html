@@ -208,6 +208,26 @@
         #light-overlay.on, #light-overlay.blink { display: block; }
         #light-overlay.blink { opacity: .6; }
 
+        /* ── « Réactiver la lampe » : la régie l'attend, le navigateur veut un toucher ──
+           Au-dessus même de la lumière, pour rester touchable écran allumé. */
+        #torch-rearm {
+            position: fixed;
+            left: 50%;
+            top: max(14px, env(safe-area-inset-top));
+            transform: translateX(-50%);
+            z-index: 5100;
+            display: none;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 22px;
+            background: #FAA61A;
+            color: #000;
+            font: 600 15px 'Segoe UI', Tahoma, sans-serif;
+            box-shadow: 0 4px 18px rgba(0,0,0,.45);
+            cursor: pointer;
+        }
+        #torch-rearm.visible { display: block; }
+
         /* ── Panneau ✨ effets ── */
         #effects-panel {
             position: fixed;
@@ -295,7 +315,7 @@
 
             <div class="fx-row">
                 <h3>💡 Lampe torche</h3>
-                <p>La régie pourra allumer la lampe de ton téléphone. Le navigateur va demander l'accès à la caméra : aucune image n'est enregistrée ni envoyée.</p>
+                <p>La régie pourra allumer la lampe de ton téléphone. Le navigateur va demander l'accès à la caméra : aucune image n'est enregistrée ni envoyée, et la caméra reste fermée tant que la régie n'en a pas besoin.</p>
                 <div class="fx-status" id="fx-torch-status"></div>
                 <button id="fx-torch-btn">Activer la lampe</button>
             </div>
@@ -319,6 +339,7 @@
 
     <!-- Lumière (écran coloré) : tout au-dessus -->
     <div id="light-overlay"></div>
+    <button id="torch-rearm">💡 Réactiver la lampe</button>
 
     <script src="./js/blast-config.js"></script>
     <script src="./js/blast-phone.js"></script>

@@ -986,13 +986,13 @@
         { title: 'Les sondages', text: 'Au cours du spectacle, on va régulierement te demander ton avis. Des sondages s\'afficheront ici et tu pourras faire ton choix en cliquant sur une réponse'},
         {
             title: 'Les effets lumineux 💡',
-            text: 'Pendant le spectacle, ton téléphone pourra s\'allumer avec la salle : son écran, et sa lampe torche si tu l\'actives.\nLe navigateur va te demander l\'accès à la caméra : aucune image n\'est enregistrée ni envoyée.',
+            text: 'Pendant le spectacle, ton téléphone pourra s\'allumer avec la salle : son écran, et sa lampe torche si tu l\'actives.\nLe navigateur va te demander l\'accès à la caméra : aucune image n\'est enregistrée ni envoyée, et la caméra reste fermée tant que la régie n\'en a pas besoin.',
             when: () => blastPhone && blastPhone.torchSupported(),
             action: {
                 label: 'Activer la lampe torche',
                 run: () => blastPhone.enableTorch(),
                 status: () => blastPhone.torchState() === 'off' ? '' : blastPhone.torchLabel(),
-                done: () => blastPhone.torchState() === 'ready',
+                done: () => blastPhone.torchEnabled(),
             },
         },
         {

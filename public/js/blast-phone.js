@@ -61,19 +61,49 @@
     // ─────────────────────────────────────────
     //  LAMPE TORCHE
     // ─────────────────────────────────────────
-    // La lampe appartient à la caméra arrière : il faut l'ouvrir (avec
-    // l'accord du spectateur) et la garder ouverte tant qu'on veut s'en servir.
+    // La lampe appartient à la caméra arrière : pour la piloter il faut la caméra
+    // ouverte, et une caméra ouverte coûte de la batterie (capteur qui tourne,
+    // voyant allumé). D'où un cycle en trois temps :
+    //  1. Le spectateur l'ACTIVE une fois (tuto ou ✨) : on demande l'accès, on
+    //     trouve la caméra qui porte la lampe, on la retient… et on referme.
+    //  2. La régie ARME les flashs quelques secondes avant de s'en servir (ou
+    //     envoie directement une lumière avec lampe) : la caméra se rouvre, en
+    //     basse résolution, juste pour tenir la lampe.
+    //  3. DÉSARMÉE par la régie, au bout d'un long silence, ou quand la page
+    //     passe en arrière-plan : la caméra se referme.
     // Aucune image n'est lue ni envoyée.
     var torch = {
-        state: 'off',      // off | pending | ready | unavailable | denied
+        // off         : pas activée par le spectateur
+        // pending     : activation en cours (demande d'accès)
+        // standby     : activée, caméra fermée
+        // arming      : la régie a armé, caméra en cours d'ouverture
+        // armed       : caméra ouverte, lampe pilotable
+        // blocked     : la régie a armé, mais rouvrir ferait surgir la demande
+        //               d'accès : il faut un geste du spectateur
+        // unavailable : pas de lampe sur ce téléphone
+        // denied      : accès à la caméra refusé
+        state: 'off',
         stream: null,
         track: null,
-        wanted: false,     // la régie veut la lampe allumée en ce moment
         lit: false,        // dernier état demandé à la lampe
     };
 
+    var serverArmed = false;          // la régie a armé les flashs
+    var lastCommandAt = Date.now();   // dernière commande de lumière ou d'armement
+    // Garde-fou si le serveur ne peut plus nous désarmer (réseau perdu) : le
+    // serveur, lui, désarme au bout de 10 min sans lumière.
+    var LOCAL_DISARM_MS = 15 * 60 * 1000;
+
+    // Petite image, peu d'images par seconde : la caméra ne sert qu'à tenir la lampe
+    var LOW_RES = { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 5, max: 15 } };
+
     function torchSupported() {
         return !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    }
+
+    function torchEnabled() {
+        return store.get('blast_torch') === 'on' && torch.state !== 'off' &&
+            torch.state !== 'unavailable' && torch.state !== 'denied';
     }
 
     function trackHasTorch(track) {
@@ -90,8 +120,20 @@
         return !!sc.torch;
     }
 
+    function isDenied(e) {
+        return !!e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
+    }
+
     function stopStream(stream) {
         if (stream) stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) { } });
+    }
+
+    function videoConstraints(base, lowRes) {
+        var c = {};
+        var k;
+        for (k in base) c[k] = base[k];
+        if (lowRes) for (k in LOW_RES) c[k] = LOW_RES[k];
+        return c;
     }
 
     function openCamera(video) {
@@ -103,8 +145,8 @@
     // Plusieurs caméras arrière (grand-angle, télé…) : la lampe n'est rattachée
     // qu'à une seule. On essaie d'abord la caméra arrière par défaut, puis les
     // autres une par une.
-    function findTorchCamera() {
-        return openCamera({ facingMode: { ideal: 'environment' } }).then(function (cam) {
+    function searchTorchCamera(lowRes) {
+        return openCamera(videoConstraints({ facingMode: { ideal: 'environment' } }, lowRes)).then(function (cam) {
             if (trackHasTorch(cam.track)) return cam;
             stopStream(cam.stream);
             return navigator.mediaDevices.enumerateDevices().then(function (devices) {
@@ -118,7 +160,7 @@
                 function next() {
                     if (i >= cams.length) return null;
                     var d = cams[i++];
-                    return openCamera({ deviceId: { exact: d.deviceId } }).then(function (c) {
+                    return openCamera(videoConstraints({ deviceId: { exact: d.deviceId } }, lowRes)).then(function (c) {
                         if (trackHasTorch(c.track)) return c;
                         stopStream(c.stream);
                         return next();
@@ -127,6 +169,34 @@
                 return next();
             });
         });
+    }
+
+    // La caméra retenue d'abord, en basse résolution ; sinon la recherche
+    // complète, en basse résolution puis (rares téléphones qui refusent la
+    // lampe en petite taille) en résolution normale.
+    function openTorchCamera() {
+        var id = store.get('blast_torch_device');
+        var remembered = id
+            ? openCamera(videoConstraints({ deviceId: { exact: id } }, true)).then(function (cam) {
+                if (trackHasTorch(cam.track)) return cam;
+                stopStream(cam.stream);
+                return null;
+            }, function (e) {
+                if (isDenied(e)) throw e;
+                return null;
+            })
+            : Promise.resolve(null);
+
+        return remembered.then(function (cam) {
+            return cam || searchTorchCamera(true).then(function (c) { return c || searchTorchCamera(false); });
+        });
+    }
+
+    function rememberDevice(track) {
+        try {
+            var id = track.getSettings ? track.getSettings().deviceId : null;
+            if (id) store.set('blast_torch_device', id);
+        } catch (e) { }
     }
 
     // Certains navigateurs coupent une caméra que rien n'affiche : on la
@@ -153,54 +223,125 @@
         }
     }
 
+    function detachVideo() {
+        var v = $('torch-video');
+        if (v) { try { v.srcObject = null; } catch (e) { } }
+    }
+
     function setTorchState(s) {
         torch.state = s;
+        reportTorch();
         changed();
     }
 
+    // Garde la caméra ouverte : la lampe est pilotable
+    function holdCamera(cam) {
+        torch.stream = cam.stream;
+        torch.track = cam.track;
+        torch.lit = false;
+        attachVideo(cam.stream);
+        cam.track.addEventListener('ended', function () {
+            if (torch.track !== cam.track) return;
+            torch.track = null;
+            torch.stream = null;
+            if (torch.state === 'armed') setTorchState('standby');
+        });
+        setTorchState('armed');
+        // La régie a peut-être déjà allumé : on suit
+        if (lightState) handleLight(lightState);
+    }
+
+    function closeCamera() {
+        applyTorch(false);
+        detachVideo();
+        stopStream(torch.stream);
+        torch.stream = null;
+        torch.track = null;
+        torch.lit = false;
+    }
+
+    // L'activation par le spectateur (tuto ou ✨), dans son geste : c'est le
+    // seul moment où la demande d'accès doit apparaître.
     function enableTorch() {
         if (!torchSupported()) { setTorchState('unavailable'); return Promise.resolve(torch.state); }
-        if (torch.state === 'ready' && torch.track && torch.track.readyState === 'live') return Promise.resolve('ready');
+        if (torchEnabled() && torch.state !== 'blocked') return Promise.resolve(torch.state);
         setTorchState('pending');
-        return findTorchCamera().then(function (cam) {
+        return openTorchCamera().then(function (cam) {
             if (!cam) {
-                setTorchState('unavailable');
                 store.set('blast_torch', 'unavailable');
+                setTorchState('unavailable');
                 return torch.state;
             }
-            torch.stream = cam.stream;
-            torch.track = cam.track;
-            torch.lit = false;
-            attachVideo(cam.stream);
-            cam.track.addEventListener('ended', function () {
-                torch.track = null;
-                torch.stream = null;
-                if (torch.state === 'ready') setTorchState('off');
-            });
             store.set('blast_torch', 'on');
-            setTorchState('ready');
-            // La régie a peut-être déjà allumé : on suit
-            if (lightState) handleLight(lightState);
-            return 'ready';
+            rememberDevice(cam.track);
+            if (serverArmed && document.visibilityState === 'visible') {
+                holdCamera(cam);
+            } else {
+                // L'accès est acquis : la caméra se referme jusqu'à l'armement
+                stopStream(cam.stream);
+                setTorchState('standby');
+            }
+            return torch.state;
         }).catch(function (e) {
             console.warn('Lampe torche indisponible :', e);
-            var denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
-            setTorchState(denied ? 'denied' : 'unavailable');
+            setTorchState(isDenied(e) ? 'denied' : 'unavailable');
             return torch.state;
         });
     }
 
     function disableTorch() {
-        applyTorch(false);
-        stopStream(torch.stream);
-        torch.stream = null;
-        torch.track = null;
+        closeCamera();
         store.set('blast_torch', 'off');
         setTorchState('off');
     }
 
+    function cameraPermission() {
+        if (!navigator.permissions || !navigator.permissions.query) return Promise.resolve('unknown');
+        return navigator.permissions.query({ name: 'camera' }).then(function (p) { return p.state; },
+            function () { return 'unknown'; });
+    }
+
+    // Rouvre la caméra pour tenir la lampe. `geste` = appelé depuis un toucher
+    // du spectateur : la demande d'accès peut alors apparaître sans surprise.
+    function armTorch(geste) {
+        if (store.get('blast_torch') !== 'on' || !torchSupported()) return Promise.resolve(torch.state);
+        if (torch.state === 'armed' && torch.track && torch.track.readyState === 'live') return Promise.resolve('armed');
+        if (torch.state === 'arming' || torch.state === 'pending') return Promise.resolve(torch.state);
+        // Une page cachée ne peut pas ouvrir la caméra : on réarme au retour
+        if (document.visibilityState !== 'visible') return Promise.resolve(torch.state);
+
+        setTorchState('arming');
+        var check = geste ? Promise.resolve('granted') : cameraPermission();
+        return check.then(function (perm) {
+            // Rouvrir sans accès acquis ferait surgir la demande du navigateur en
+            // plein spectacle : on attend un toucher (bouton « Réactiver »).
+            if (perm === 'prompt') { setTorchState('blocked'); return torch.state; }
+            if (perm === 'denied') { setTorchState('denied'); return torch.state; }
+            return openTorchCamera().then(function (cam) {
+                if (!cam) { setTorchState('unavailable'); return torch.state; }
+                // Désarmé pendant l'ouverture
+                if (!serverArmed && !(lightState && lightState.mode !== 'screen')) {
+                    stopStream(cam.stream);
+                    setTorchState('standby');
+                    return torch.state;
+                }
+                rememberDevice(cam.track);
+                holdCamera(cam);
+                return 'armed';
+            });
+        }).catch(function (e) {
+            console.warn('Armement de la lampe impossible :', e);
+            setTorchState(isDenied(e) ? 'denied' : 'standby');
+            return torch.state;
+        });
+    }
+
+    function disarmTorch() {
+        closeCamera();
+        if (torch.state === 'armed' || torch.state === 'arming' || torch.state === 'blocked') setTorchState('standby');
+    }
+
     function applyTorch(on) {
-        torch.wanted = on;
         if (!torch.track || torch.track.readyState !== 'live') return Promise.resolve(false);
         if (torch.lit === on) return Promise.resolve(true);
         torch.lit = on;
@@ -211,14 +352,26 @@
         });
     }
 
-    // Lampe déjà acceptée lors d'une visite précédente : on la rouvre sans
-    // redemander, seulement si le navigateur confirme que l'accès est acquis.
+    // Lampe activée lors d'une visite précédente : elle reste en attente, caméra
+    // fermée. Elle ne se rouvrira que sur armement.
     function restoreTorch() {
-        if (store.get('blast_torch') !== 'on' || !torchSupported()) return;
-        if (!navigator.permissions || !navigator.permissions.query) return;
-        navigator.permissions.query({ name: 'camera' }).then(function (p) {
-            if (p.state === 'granted') enableTorch();
-        }, function () { });
+        var saved = store.get('blast_torch');
+        if (saved === 'on' && torchSupported()) setTorchState('standby');
+        else if (saved === 'unavailable') setTorchState('unavailable');
+    }
+
+    function handleTorchArm(d) {
+        lastCommandAt = Date.now();
+        serverArmed = !!(d && d.armed);
+        if (serverArmed) armTorch(); else disarmTorch();
+    }
+
+    // Ce que la régie compte : armée, en attente, ou rien
+    var socketRef = null;
+    function reportTorch() {
+        if (!socketRef || !socketRef.connected) return;
+        var s = torch.state === 'armed' ? 'armed' : torchEnabled() ? 'standby' : 'none';
+        socketRef.emit('torch_state', { state: s });
     }
 
     // ─────────────────────────────────────────
@@ -234,6 +387,7 @@
     var TORCH_MAX_STROBE = 4;
 
     function handleLight(l) {
+        lastCommandAt = Date.now();
         clearTimeout(flashTimer);
         clearInterval(strobeTimer);
         strobeTimer = null;
@@ -245,9 +399,13 @@
             return;
         }
 
-        var torchReady = torch.state === 'ready';
-        var useTorch = l.mode !== 'screen' && torchReady;
-        // Lampe demandée mais absente sur ce téléphone : l'écran prend le relais
+        var torchArmed = torch.state === 'armed';
+        // Lampe demandée mais caméra fermée : on arme, la lampe suivra dès que
+        // la caméra sera ouverte (holdCamera rejoue cette commande).
+        if (l.mode !== 'screen' && !torchArmed && torchEnabled()) armTorch();
+
+        var useTorch = l.mode !== 'screen' && torchArmed;
+        // Lampe absente ou pas encore prête : l'écran prend le relais
         var useScreen = l.mode !== 'torch' || !useTorch;
         var torchStrobes = l.strobe > 0 && l.strobe <= TORCH_MAX_STROBE;
 
@@ -513,12 +671,38 @@
     }
 
     // ─────────────────────────────────────────
+    //  INSTALLATION SUR IPHONE
+    // ─────────────────────────────────────────
+    // Sur iPhone, seul un navigateur qui l'a prévu sait ajouter un site à l'écran
+    // d'accueil : Safari, Chrome, Edge… mais pas Brave. Brave se reconnaît à
+    // navigator.brave ; les autres à leur signature (CriOS, FxiOS…).
+    function isBrave() {
+        return !!navigator.brave;
+    }
+
+    function iosInstallHint() {
+        var ua = navigator.userAgent;
+        if (isBrave()) {
+            return 'Brave ne sait pas installer d\'application sur iPhone : ouvre cette page dans Safari, ' +
+                'puis touche Partager → « Sur l\'écran d\'accueil ».';
+        }
+        if (/FxiOS|OPiOS|DuckDuckGo|GSA\//.test(ua)) {
+            return 'Ouvre cette page dans Safari, puis touche Partager → « Sur l\'écran d\'accueil ».';
+        }
+        return 'Touche Partager puis « Sur l\'écran d\'accueil ». Si ton navigateur ne le propose pas ' +
+            '(Brave…), ouvre cette page dans Safari.';
+    }
+
+    // ─────────────────────────────────────────
     //  PANNEAU ✨ (effets)
     // ─────────────────────────────────────────
     var TORCH_LABELS = {
         off: 'Désactivée',
         pending: 'Activation…',
-        ready: '✅ Activée',
+        standby: '✅ Activée : elle s\'allumera quand la régie en aura besoin',
+        arming: '✅ Activée : préparation de la lampe…',
+        armed: '✅ Activée et prête',
+        blocked: 'La régie veut allumer ta lampe : touche « Réactiver la lampe »',
         unavailable: 'Pas de lampe utilisable : l\'écran s\'allumera à la place',
         denied: 'Accès à la caméra refusé : autorise-le dans les réglages du navigateur',
     };
@@ -529,29 +713,43 @@
         on: '✅ Activées',
         denied: 'Refusées : autorise-les dans les réglages du téléphone',
         unsupported: 'Non disponibles sur ce navigateur',
-        'ios-install': 'Sur iPhone : touche Partager puis « Sur l\'écran d\'accueil », ouvre BLAST depuis la nouvelle icône, puis reviens ici',
         'server-off': 'Pas encore disponibles pour ce spectacle',
         error: 'Activation impossible, réessaie plus tard',
     };
 
+    function pushLabel() {
+        if (push.state === 'ios-install') {
+            return 'Sur iPhone, les notifications demandent BLAST installé. ' + iosInstallHint() +
+                ' Ouvre ensuite BLAST depuis la nouvelle icône et reviens ici.';
+        }
+        return PUSH_LABELS[push.state] || '';
+    }
+
     function renderPanel() {
         var panel = $('effects-panel');
-        if (!panel) return;
-        $('fx-torch-status').textContent = TORCH_LABELS[torch.state] || '';
-        var tb = $('fx-torch-btn');
-        tb.textContent = torch.state === 'ready' ? 'Désactiver' : 'Activer la lampe';
-        tb.disabled = torch.state === 'pending' || !torchSupported();
+        if (panel) {
+            $('fx-torch-status').textContent = TORCH_LABELS[torch.state] || '';
+            var tb = $('fx-torch-btn');
+            tb.textContent = torch.state === 'blocked' ? 'Réactiver la lampe'
+                : torchEnabled() ? 'Désactiver' : 'Activer la lampe';
+            tb.disabled = torch.state === 'pending' || torch.state === 'arming' || !torchSupported();
 
-        $('fx-push-status').textContent = PUSH_LABELS[push.state] || '';
-        var pb = $('fx-push-btn');
-        pb.textContent = push.state === 'on' ? 'Désactiver' : 'Activer les notifications';
-        pb.disabled = push.state === 'pending' || push.state === 'unsupported' || push.state === 'ios-install';
+            $('fx-push-status').textContent = pushLabel();
+            var pb = $('fx-push-btn');
+            pb.textContent = push.state === 'on' ? 'Désactiver' : 'Activer les notifications';
+            pb.disabled = push.state === 'pending' || push.state === 'unsupported' || push.state === 'ios-install';
 
-        var installRow = $('fx-install-row');
-        var iosHint = isIOS() && !isStandalone();
-        installRow.style.display = installPrompt || iosHint ? '' : 'none';
-        $('fx-install-btn').style.display = installPrompt ? '' : 'none';
-        $('fx-install-hint').style.display = iosHint ? '' : 'none';
+            var installRow = $('fx-install-row');
+            var iosHint = isIOS() && !isStandalone();
+            installRow.style.display = installPrompt || iosHint ? '' : 'none';
+            $('fx-install-btn').style.display = installPrompt ? '' : 'none';
+            $('fx-install-hint').textContent = iosInstallHint();
+            $('fx-install-hint').style.display = iosHint ? '' : 'none';
+        }
+
+        // Le bouton flottant « Réactiver la lampe », seulement quand la régie l'attend
+        var rearm = $('torch-rearm');
+        if (rearm) rearm.classList.toggle('visible', torch.state === 'blocked');
     }
 
     function openPanel() {
@@ -563,10 +761,14 @@
         $('effects-panel').classList.remove('open');
     }
 
+    function torchButton() {
+        if (torch.state === 'blocked') armTorch(true);
+        else if (torchEnabled()) disableTorch();
+        else enableTorch();
+    }
+
     function bindPanel() {
-        $('fx-torch-btn').addEventListener('click', function () {
-            if (torch.state === 'ready') disableTorch(); else enableTorch();
-        });
+        $('fx-torch-btn').addEventListener('click', torchButton);
         $('fx-push-btn').addEventListener('click', function () {
             if (push.state === 'on') disablePush(); else enablePush();
         });
@@ -575,13 +777,18 @@
         $('effects-panel').addEventListener('click', function (e) {
             if (e.target === $('effects-panel')) closePanel();
         });
+        var rearm = $('torch-rearm');
+        if (rearm) rearm.addEventListener('click', function () { armTorch(true); });
     }
 
     // ─────────────────────────────────────────
     //  BRANCHEMENT
     // ─────────────────────────────────────────
     function attach(socket) {
+        socketRef = socket;
+        socket.on('connect', reportTorch);
         socket.on('light', handleLight);
+        socket.on('torch_arm', handleTorchArm);
         socket.on('vibrate', handleVibrate);
         socket.on('show_carton', showCarton);
         socket.on('hide_carton', hideCarton);
@@ -589,18 +796,30 @@
 
     function init() {
         bindPanel();
+        restoreTorch();
         renderPanel();
         registerServiceWorker();
-        restoreTorch();
         requestWakeLock();
+
         document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState !== 'visible') return;
-            requestWakeLock();
-            // La caméra a pu être coupée pendant que la page était cachée
-            if (store.get('blast_torch') === 'on' && (!torch.track || torch.track.readyState !== 'live')) {
-                restoreTorch();
+            if (document.visibilityState === 'visible') {
+                requestWakeLock();
+                // Toujours armée : on rouvre la caméra au retour sur la page
+                if (serverArmed) armTorch();
+            } else if (torch.track) {
+                // En arrière-plan la caméra est inutilisable : on la libère
+                closeCamera();
+                if (torch.state === 'armed') setTorchState('standby');
             }
         });
+
+        // Garde-fou : armée, mais plus aucune commande depuis longtemps
+        setInterval(function () {
+            if (torch.track && Date.now() - lastCommandAt > LOCAL_DISARM_MS) {
+                serverArmed = false;
+                disarmTorch();
+            }
+        }, 30000);
     }
 
     window.BlastPhone = {
@@ -614,14 +833,16 @@
         openPanel: openPanel,
         closePanel: closePanel,
         torchState: function () { return torch.state; },
+        torchEnabled: torchEnabled,
         pushState: function () { return push.state; },
         torchSupported: torchSupported,
         pushSupport: pushSupport,
         torchLabel: function () { return TORCH_LABELS[torch.state] || ''; },
-        pushLabel: function () { return PUSH_LABELS[push.state] || ''; },
+        pushLabel: pushLabel,
         onChange: function (fn) { listeners.push(fn); },
         // Pour les tests : rejouer une commande sans passer par le serveur
         _light: handleLight,
+        _arm: handleTorchArm,
         _carton: showCarton,
         _hideCarton: hideCarton,
     };
