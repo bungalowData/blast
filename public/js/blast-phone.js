@@ -651,6 +651,11 @@
         }
     }
 
+    // Installation : sur Android (Chrome, Edge, Samsung…) le navigateur propose
+    // lui-même d'installer, via beforeinstallprompt, qu'on garde pour un bouton.
+    // Sur iPhone il n'y a pas de bouton possible : seulement des explications.
+    var installed = false;
+
     window.addEventListener('beforeinstallprompt', function (e) {
         e.preventDefault();
         installPrompt = e;
@@ -659,6 +664,7 @@
 
     window.addEventListener('appinstalled', function () {
         installPrompt = null;
+        installed = true;
         changed();
     });
 
@@ -667,7 +673,27 @@
         var p = installPrompt;
         installPrompt = null;
         p.prompt();
-        return p.userChoice.then(function (c) { changed(); return c && c.outcome === 'accepted'; });
+        return p.userChoice.then(function (c) {
+            if (c && c.outcome === 'accepted') installed = true;
+            changed();
+            return installed;
+        });
+    }
+
+    // Vaut-il la peine de proposer l'installation ? Pas dans l'app installée,
+    // oui sur iPhone (explications), oui là où le navigateur sait installer —
+    // même si sa proposition n'est pas encore arrivée : elle vient souvent
+    // quelques secondes après le chargement, le bouton s'active alors.
+    function installSuggested() {
+        if (isStandalone()) return false;
+        return isIOS() || !!installPrompt || 'onbeforeinstallprompt' in window;
+    }
+
+    function installLabel() {
+        if (installed) return '✅ Installée : tu la retrouveras sur ton écran d\'accueil';
+        if (installPrompt) return '';
+        return 'Le bouton s\'active dès que le navigateur est prêt. S\'il reste grisé, BLAST est peut-être ' +
+            'déjà installé ; sinon, menu ⋮ → « Installer l\'application ».';
     }
 
     // ─────────────────────────────────────────
@@ -739,12 +765,16 @@
             pb.textContent = push.state === 'on' ? 'Désactiver' : 'Activer les notifications';
             pb.disabled = push.state === 'pending' || push.state === 'unsupported' || push.state === 'ios-install';
 
-            var installRow = $('fx-install-row');
-            var iosHint = isIOS() && !isStandalone();
-            installRow.style.display = installPrompt || iosHint ? '' : 'none';
-            $('fx-install-btn').style.display = installPrompt ? '' : 'none';
-            $('fx-install-hint').textContent = iosInstallHint();
-            $('fx-install-hint').style.display = iosHint ? '' : 'none';
+            // iPhone : la marche à suivre ; ailleurs : le bouton, grisé tant que le
+            // navigateur n'a pas fait sa proposition
+            var ios = isIOS();
+            $('fx-install-row').style.display = installSuggested() || installed ? '' : 'none';
+            var ib = $('fx-install-btn');
+            ib.style.display = ios ? 'none' : '';
+            ib.disabled = !installPrompt;
+            var hint = ios ? iosInstallHint() : installLabel();
+            $('fx-install-hint').textContent = hint;
+            $('fx-install-hint').style.display = hint ? '' : 'none';
         }
 
         // Le bouton flottant « Réactiver la lampe », seulement quand la régie l'attend
@@ -839,6 +869,13 @@
         pushSupport: pushSupport,
         torchLabel: function () { return TORCH_LABELS[torch.state] || ''; },
         pushLabel: pushLabel,
+        isIOS: isIOS,
+        isStandalone: isStandalone,
+        iosInstallHint: iosInstallHint,
+        installSuggested: installSuggested,
+        canInstall: function () { return !!installPrompt; },
+        installed: function () { return installed; },
+        installLabel: installLabel,
         onChange: function (fn) { listeners.push(fn); },
         // Pour les tests : rejouer une commande sans passer par le serveur
         _light: handleLight,

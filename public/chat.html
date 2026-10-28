@@ -984,6 +984,26 @@
         { title: 'Comment ça marche', text: 'Ici tu es dans un chat. \nÉcris ton message en bas et appuie sur envoyer.\nTu peux discuter avec nous, et avec les autres spectateurs.' },
         { title: 'Les regles du jeu', text: 'Tout propos diffamant ou discriminatoire est interdit et entraînera une exclusion par un modérateur.' },
         { title: 'Les sondages', text: 'Au cours du spectacle, on va régulierement te demander ton avis. Des sondages s\'afficheront ici et tu pourras faire ton choix en cliquant sur une réponse'},
+        // Sur iPhone, pas de bouton possible : seulement la marche à suivre. Avant
+        // les notifications, qui y exigent BLAST installé.
+        blastPhone && blastPhone.isIOS() ? {
+            title: 'Installer BLAST 📲',
+            text: 'Ajoute BLAST à ton écran d\'accueil : il s\'ouvrira en plein écran, comme une application, et c\'est indispensable sur iPhone pour recevoir les notifications.\n' +
+                blastPhone.iosInstallHint() + '\nOuvre ensuite BLAST depuis la nouvelle icône.',
+            when: () => blastPhone.installSuggested(),
+        } : {
+            title: 'Installer BLAST 📲',
+            text: 'Ajoute BLAST à ton écran d\'accueil : il s\'ouvrira en plein écran, comme une application, et tu le retrouveras d\'un geste pendant le spectacle.',
+            when: () => blastPhone && blastPhone.installSuggested(),
+            action: {
+                label: 'Installer l\'application',
+                doneLabel: '✅ Installée',
+                run: () => blastPhone.install(),
+                status: () => blastPhone.installLabel(),
+                done: () => blastPhone.installed(),
+                disabled: () => !blastPhone.canInstall(),
+            },
+        },
         {
             title: 'Les effets lumineux 💡',
             text: 'Pendant le spectacle, ton téléphone pourra s\'allumer avec la salle : son écran, et sa lampe torche si tu l\'actives.\nLe navigateur va te demander l\'accès à la caméra : aucune image n\'est enregistrée ni envoyée, et la caméra reste fermée tant que la régie n\'en a pas besoin.',
@@ -1008,12 +1028,12 @@
             },
         },
         { title: 'Le tweet', text: 'Si tu passes tous les niveaux du jeu tu pourras rediger ton propre tweet et astroturfer les internets avec nous. On te guidera en temps voulu pour cela ;)' },
-        { title: 'Pret??  C\'est parti !', text: 'Bon spectacle.' + (blastPhone ? '\nLe bouton ✨ en haut te permet de régler la lampe et les notifications à tout moment.' : '') },
+        { title: 'Pret??  C\'est parti !', text: 'Bon spectacle.' + (blastPhone ? '\nLe bouton ✨ en haut te permet de régler la lampe, les notifications et l\'installation à tout moment.' : '') },
         ].filter(p => !p.when || p.when());
     }
-    // v2 : les pages lampe et notifications sont nouvelles, le tutoriel est
-    // remontré une fois à ceux qui l'avaient déjà vu.
-    const TUTORIAL_KEY = 'blast_tutorial_seen_v2';
+    // v3 : la page « Installer BLAST » est nouvelle, le tutoriel est remontré une
+    // fois à ceux qui l'avaient déjà vu (v2 : lampe et notifications).
+    const TUTORIAL_KEY = 'blast_tutorial_seen_v3';
     let tutorialIndex = 0;
 
     function renderTutorialAction() {
@@ -1027,7 +1047,7 @@
             return;
         }
         btn.style.display = 'block';
-        btn.textContent = a.done() ? '✅ Activé' : a.label;
+        btn.textContent = a.done() ? (a.doneLabel || '✅ Activé') : a.label;
         btn.disabled = a.done() || (a.disabled ? a.disabled() : false);
         const s = a.status();
         status.textContent = s;
