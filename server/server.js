@@ -254,16 +254,18 @@ const TORCH_ARM_TIMEOUT_MS = Number(process.env.TORCH_ARM_TIMEOUT_MS) || 10 * 60
 let torchArmed = false;
 let torchDisarmTimer = null;
 
+// Renvoie true quand l'état a changé (et a donc été diffusé à tout le monde)
 function setTorchArmed(armed, reason) {
     clearTimeout(torchDisarmTimer);
     torchDisarmTimer = armed
         ? setTimeout(() => setTorchArmed(false, 'désarmement automatique, aucune lumière depuis ' +
             Math.round(TORCH_ARM_TIMEOUT_MS / 60000) + ' min'), TORCH_ARM_TIMEOUT_MS)
         : null;
-    if (armed === torchArmed) return;
+    if (armed === torchArmed) return false;
     torchArmed = armed;
     io.emit('torch_arm', { armed });
     console.log(`Flashs ${armed ? 'armés' : 'désarmés'}${reason ? ` (${reason})` : ''}`);
+    return true;
 }
 
 // Chaque téléphone dit où en est sa lampe : 'armed' (caméra ouverte),
@@ -546,9 +548,9 @@ io.on('connection', (socket) => {
 
     // ── Admin : armer / désarmer les lampes torches ──
     onAdmin(socket, 'torch_arm', (data) => {
-        setTorchArmed(Boolean(data.armed), 'régie');
-        // Réponse même sans changement : la régie qui insiste voit l'état
-        socket.emit('torch_arm', { armed: torchArmed });
+        // Sans changement, rien n'est diffusé : on répond quand même à la régie
+        // qui insiste, pour qu'elle voie l'état
+        if (!setTorchArmed(Boolean(data.armed), 'régie')) socket.emit('torch_arm', { armed: torchArmed });
     });
 
     // ── Admin : notification push à tous les abonnés ──
