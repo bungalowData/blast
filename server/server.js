@@ -19,7 +19,11 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
+// Mot de passe de la régie : routes /admin/* et commandes socket (admin.html, Unity)
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'blast-admin';
+
 const githubStore = require('./github-store');
+const webPush = require('./web-push');
 
 // ─────────────────────────────────────────
 //  TEMPLATES DE SONDAGES
@@ -80,11 +84,231 @@ async function saveTweets(tweets) {
 }
 
 // ─────────────────────────────────────────
-//  SONDAGE  (existant, inchangé)
+//  PRESETS (images et sons de la régie)
+// ─────────────────────────────────────────
+// Une seule liste pour admin.html et la régie Unity, versionnée avec le serveur.
+// Relue à chaque requête : le fichier est minuscule et on peut le modifier
+// sans redémarrer.
+const PRESETS_FILE = path.join(__dirname, 'presets.json');
+
+function loadPresets() {
+    try {
+        const p = JSON.parse(fs.readFileSync(PRESETS_FILE, 'utf8'));
+        return { images: Array.isArray(p.images) ? p.images : [], sounds: Array.isArray(p.sounds) ? p.sounds : [] };
+    } catch (e) {
+        console.error('Erreur lecture presets:', e);
+        return { images: [], sounds: [] };
+    }
+}
+
+app.get('/presets', (req, res) => {
+    res.send(loadPresets());
+});
+
+// ─────────────────────────────────────────
+//  NOTIFICATIONS PUSH
+// ─────────────────────────────────────────
+// Clés à créer une fois avec `node server/web-push.js --generate`, puis à
+// renseigner dans les variables d'environnement de Render.
+const VAPID = {
+    publicKey: (process.env.VAPID_PUBLIC_KEY || '').trim(),
+    privateKey: (process.env.VAPID_PRIVATE_KEY || '').trim(),
+    subject: (process.env.VAPID_SUBJECT || '').trim() || 'https://blast.blindsp0t.com',
+};
+
+let pushEnabled = false;
+if (VAPID.publicKey && VAPID.privateKey) {
+    try {
+        webPush.validateVAPIDKeys(VAPID.publicKey, VAPID.privateKey);
+        pushEnabled = true;
+        console.log('[push] Notifications push activées.');
+    } catch (e) {
+        console.error('[push] Désactivées :', e.message);
+    }
+} else {
+    console.warn('[push] Désactivées : VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY absents.');
+}
+
+const MAX_PUSH_SUBSCRIPTIONS = 5000;
+let pushSubscriptions = [];   // [{ endpoint, keys: { p256dh, auth }, createdAt }]
+let pushSaveTimer = null;
+
+async function loadPushSubscriptions() {
+    if (!githubStore.isConfigured()) return;
+    const list = await githubStore.readJson('push-subscriptions.json', []);
+    pushSubscriptions = Array.isArray(list) ? list.filter(webPush.isValidSubscription) : [];
+}
+
+// Regroupe les écritures : 300 spectateurs qui s'abonnent dans la même minute
+// ne doivent pas devenir 300 commits sur le dépôt de données.
+function schedulePushSave() {
+    if (!githubStore.isConfigured() || pushSaveTimer) return;
+    pushSaveTimer = setTimeout(() => {
+        pushSaveTimer = null;
+        githubStore.writeJson('push-subscriptions.json', pushSubscriptions, 'Mise à jour des abonnements push')
+            .catch(e => console.error('[push] Sauvegarde des abonnements impossible :', e));
+    }, 10000);
+}
+
+function sanitizeNotification(d) {
+    d = d || {};
+    const url = typeof d.url === 'string' && /^(\.?\/|https:\/\/)/.test(d.url.trim()) ? d.url.trim().slice(0, 500) : './index_new.html';
+    return {
+        title: cleanText(d.title, 80) || 'BLAST',
+        body: cleanText(d.body, 300),
+        url,
+        tag: cleanText(d.tag, 40) || 'blast',
+    };
+}
+
+async function pushToAll(notification) {
+    if (!pushEnabled) return { sent: 0, failed: 0, removed: 0, disabled: true };
+
+    const payload = JSON.stringify(notification);
+    const queue = pushSubscriptions.slice();
+    const gone = new Set();
+    let sent = 0, failed = 0;
+
+    // 20 envois en parallèle : assez pour quelques centaines d'abonnés en
+    // quelques secondes, sans ouvrir des centaines de connexions d'un coup.
+    async function worker() {
+        while (queue.length) {
+            const sub = queue.shift();
+            try {
+                const r = await webPush.sendNotification(sub, payload, VAPID);
+                if (r.statusCode >= 200 && r.statusCode < 300) {
+                    sent++;
+                } else {
+                    failed++;
+                    if (r.gone) gone.add(sub.endpoint);
+                }
+            } catch (e) {
+                failed++;
+            }
+        }
+    }
+    await Promise.all(Array.from({ length: Math.min(20, queue.length) }, worker));
+
+    if (gone.size) {
+        pushSubscriptions = pushSubscriptions.filter(s => !gone.has(s.endpoint));
+        schedulePushSave();
+    }
+    console.log(`[push] ${sent} envoyée(s), ${failed} échec(s), ${gone.size} abonnement(s) expiré(s)`);
+    return { sent, failed, removed: gone.size };
+}
+
+app.get('/push/public-key', (req, res) => {
+    if (!pushEnabled) return res.status(503).send({ error: 'Notifications push non configurées.' });
+    res.send({ publicKey: VAPID.publicKey });
+});
+
+app.post('/push/subscribe', (req, res) => {
+    if (!pushEnabled) return res.status(503).send({ error: 'Notifications push non configurées.' });
+    const sub = req.body && req.body.subscription;
+    if (!webPush.isValidSubscription(sub)) return res.status(400).send({ error: 'Abonnement invalide.' });
+
+    const entry = {
+        endpoint: sub.endpoint,
+        keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
+        createdAt: new Date().toISOString(),
+    };
+    const i = pushSubscriptions.findIndex(s => s.endpoint === entry.endpoint);
+    if (i >= 0) {
+        pushSubscriptions[i] = entry;
+    } else {
+        if (pushSubscriptions.length >= MAX_PUSH_SUBSCRIPTIONS) {
+            return res.status(507).send({ error: 'Trop d\'abonnements.' });
+        }
+        pushSubscriptions.push(entry);
+    }
+    schedulePushSave();
+    res.send({ success: true });
+});
+
+app.post('/push/unsubscribe', (req, res) => {
+    const endpoint = req.body && req.body.endpoint;
+    if (typeof endpoint !== 'string') return res.status(400).send({ error: 'Endpoint requis.' });
+    const before = pushSubscriptions.length;
+    pushSubscriptions = pushSubscriptions.filter(s => s.endpoint !== endpoint);
+    if (pushSubscriptions.length !== before) schedulePushSave();
+    res.send({ success: true });
+});
+
+// ─────────────────────────────────────────
+//  RÉGIE : état partagé et validation
+// ─────────────────────────────────────────
+// Ce que la régie affiche en ce moment sur les téléphones. Un spectateur qui
+// arrive (ou qui recharge sa page) le reçoit dès sa connexion.
+let currentImage = null;
+let currentCarton = null;
+let currentLight = null;
+
+function cleanText(v, max) {
+    return typeof v === 'string' ? v.trim().slice(0, max) : '';
+}
+
+function clampNumber(v, min, max) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return min;
+    return Math.min(max, Math.max(min, n));
+}
+
+function cleanColor(v) {
+    return typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : '#ffffff';
+}
+
+function cleanPattern(p) {
+    if (!Array.isArray(p)) return null;
+    const out = p.slice(0, 20).map(v => Math.round(clampNumber(v, 0, 5000)));
+    return out.length ? out : null;
+}
+
+const LIGHT_MODES = ['screen', 'torch', 'both'];
+
+function sanitizeLight(d) {
+    return {
+        on: Boolean(d.on),
+        mode: LIGHT_MODES.includes(d.mode) ? d.mode : 'both',
+        color: cleanColor(d.color),
+        flash: Math.round(clampNumber(d.flash, 0, 10000)),   // ms ; 0 = reste allumé
+        strobe: clampNumber(d.strobe, 0, 12),                // Hz ; 0 = lumière fixe
+    };
+}
+
+const CARTON_ALIGNS = ['gauche', 'centre', 'droite', 'justifie'];
+
+function sanitizeCarton(d) {
+    const imageUrl = typeof d.imageUrl === 'string' && /^https?:\/\//i.test(d.imageUrl.trim())
+        ? d.imageUrl.trim().slice(0, 1000) : '';
+    return {
+        id: cleanText(d.id, 100),
+        titre: cleanText(d.titre, 300),
+        sousTitre: cleanText(d.sousTitre, 300),
+        texte: cleanText(d.texte, 4000),
+        auteur: cleanText(d.auteur, 300),
+        source: cleanText(d.source, 300),
+        imageUrl,
+        couleur: cleanColor(d.couleur),
+        alignementTexte: CARTON_ALIGNS.includes(d.alignementTexte) ? d.alignementTexte : 'justifie',
+        alignementCredit: CARTON_ALIGNS.includes(d.alignementCredit) ? d.alignementCredit : 'gauche',
+        titreEnMajuscules: d.titreEnMajuscules !== false,
+        titreSousLeTexte: Boolean(d.titreSousLeTexte),
+    };
+}
+
+// Toute commande de régie peut faire vibrer les téléphones en même temps :
+// { vibrate: true } pour le motif par défaut, ou { vibrate: [400, 150, 400] }.
+function vibrateIfAsked(d) {
+    if (!d.vibrate) return;
+    const pattern = cleanPattern(d.vibrate);
+    io.emit('vibrate', pattern ? { pattern } : {});
+}
+
+// ─────────────────────────────────────────
+//  SONDAGE
 // ─────────────────────────────────────────
 let votes = [];
 let currentPoll = { question: '', reponses: [] };
-let currentImage = null;
 
 app.post('/vote', (req, res) => {
     const { option } = req.body;
@@ -102,7 +326,12 @@ app.get('/results', (req, res) => {
     res.send(result);
 });
 
+// Rediffuse le sondage en cours sur tous les téléphones. Protégée : sans mot de
+// passe, n'importe qui pouvait faire réapparaître le sondage chez tout le monde.
 app.get('/declencher-sondage', (req, res) => {
+    if (req.get('x-admin-password') !== ADMIN_PASSWORD) {
+        return res.status(401).send({ error: 'Mot de passe incorrect (en-tête x-admin-password).' });
+    }
     io.emit('afficher_sondage', currentPoll);
     res.send({ success: true, message: "Sondage déclenché avec succès !" });
 });
@@ -130,58 +359,132 @@ function broadcastUserCount() {
 // ─────────────────────────────────────────
 //  SOCKET.IO
 // ─────────────────────────────────────────
+// Une commande de régie n'est exécutée que si la connexion s'est présentée avec
+// le mot de passe admin (handshake socket.io : auth: { password }). Avant, un
+// spectateur pouvait tout déclencher depuis la console de son navigateur.
+function onAdmin(socket, event, handler) {
+    socket.on(event, (data) => {
+        if (!socket.data.admin) {
+            console.warn(`Commande admin refusée (${event}) pour ${socket.id}`);
+            socket.emit('admin_status', { admin: false, refused: event });
+            return;
+        }
+        handler(data && typeof data === 'object' ? data : {});
+    });
+}
+
 io.on('connection', (socket) => {
     console.log(`Nouvelle connexion : ${socket.id}`);
 
-    // ── Envoyer l'image en cours au nouveau client ──
-    if (currentImage) {
-        socket.emit('show_image', { imageUrl: currentImage });
+    // ── Régie : authentification à la connexion ──
+    // Une mauvaise clé ne ferme pas la connexion : la régie Unity est aussi un
+    // participant du chat, et le chat doit marcher même sans droits admin.
+    const auth = socket.handshake.auth || {};
+    socket.data.admin = typeof auth.password === 'string' && auth.password === ADMIN_PASSWORD;
+    if (auth.password !== undefined) {
+        socket.emit('admin_status', { admin: socket.data.admin });
+        console.log(socket.data.admin ? `Régie connectée : ${socket.id}` : `Mot de passe régie refusé : ${socket.id}`);
     }
 
-    // ── Sondage (existant) ──
-    socket.on('demander_sondage', () => {
+    // ── Rattraper l'état en cours (image, carton, lumière) ──
+    if (currentImage) socket.emit('show_image', { imageUrl: currentImage });
+    if (currentCarton) socket.emit('show_carton', currentCarton);
+    if (currentLight) socket.emit('light', currentLight);
+
+    // ── Sondage ──
+    onAdmin(socket, 'demander_sondage', () => {
         io.emit('afficher_sondage', currentPoll);
     });
 
-    socket.on('nouveau_sondage', (data) => {
-        currentPoll = { question: data.question, reponses: data.reponses };
+    onAdmin(socket, 'nouveau_sondage', async (data) => {
+        const question = cleanText(data.question, 200);
+        const reponses = Array.isArray(data.reponses)
+            ? data.reponses.map(r => cleanText(String(r), 100)).filter(Boolean).slice(0, 10)
+            : [];
+        if (!question || reponses.length < 2) return;
+
+        currentPoll = { question, reponses };
         votes = [];
-        console.log(`Nouveau sondage : ${data.question}`);
+        console.log(`Nouveau sondage : ${question}`);
         io.emit('afficher_sondage', currentPoll);
+        vibrateIfAsked(data);
+
+        if (data.push) {
+            const result = await pushToAll({ title: 'Nouveau sondage', body: question, url: './index_new.html', tag: 'sondage' });
+            socket.emit('push_result', result);
+        }
     });
 
     // ── Admin : vibrer tous les clients ──
-    socket.on('admin_vibrate', () => {
-        io.emit('vibrate');
+    onAdmin(socket, 'admin_vibrate', (data) => {
+        const pattern = cleanPattern(data.pattern);
+        io.emit('vibrate', pattern ? { pattern } : {});
         console.log('Vibration déclenchée par admin');
     });
 
     // ── Admin : diffuser un son sur tous les clients (sauf l'admin émetteur) ──
-    socket.on('play_sound', ({ soundUrl }) => {
-        if (!soundUrl || typeof soundUrl !== 'string') return;
-        socket.broadcast.emit('play_sound', { soundUrl: soundUrl.trim() });
-        console.log(`Son diffusé : ${soundUrl.trim()}`);
+    onAdmin(socket, 'play_sound', (data) => {
+        const soundUrl = cleanText(data.soundUrl, 1000);
+        if (!/^https?:\/\//i.test(soundUrl)) return;
+        socket.broadcast.emit('play_sound', { soundUrl });
+        vibrateIfAsked(data);
+        console.log(`Son diffusé : ${soundUrl}`);
     });
 
     // ── Admin : stopper la lecture sur tous les clients ──
-    socket.on('stop_sound', () => {
+    onAdmin(socket, 'stop_sound', () => {
         socket.broadcast.emit('stop_sound');
         console.log('Arrêt du son demandé par admin');
     });
 
     // ── Admin : afficher image plein écran ──
-    socket.on('show_image', ({ imageUrl }) => {
-        if (!imageUrl || typeof imageUrl !== 'string') return;
-        currentImage = imageUrl.trim();
+    onAdmin(socket, 'show_image', (data) => {
+        const imageUrl = cleanText(data.imageUrl, 1000);
+        if (!/^https?:\/\//i.test(imageUrl)) return;
+        currentImage = imageUrl;
         io.emit('show_image', { imageUrl: currentImage });
+        vibrateIfAsked(data);
         console.log(`Image affichée : ${currentImage}`);
     });
 
     // ── Admin : masquer image ──
-    socket.on('hide_image', () => {
+    onAdmin(socket, 'hide_image', () => {
         currentImage = null;
         io.emit('hide_image');
         console.log('Image masquée');
+    });
+
+    // ── Admin : carton (le même qu'à l'écran dans Unity) ──
+    onAdmin(socket, 'show_carton', (data) => {
+        const carton = sanitizeCarton(data);
+        if (!carton.titre && !carton.sousTitre && !carton.texte && !carton.imageUrl) return;
+        currentCarton = carton;
+        io.emit('show_carton', currentCarton);
+        vibrateIfAsked(data);
+        console.log(`Carton affiché : ${carton.id || carton.titre || '(sans titre)'}`);
+    });
+
+    onAdmin(socket, 'hide_carton', () => {
+        currentCarton = null;
+        io.emit('hide_carton');
+        console.log('Carton masqué');
+    });
+
+    // ── Admin : lumière (écran coloré et/ou lampe torche) ──
+    onAdmin(socket, 'light', (data) => {
+        const light = sanitizeLight(data);
+        // Un flash est un événement, pas un état : un retardataire ne doit pas
+        // recevoir un flash fini depuis longtemps.
+        currentLight = light.on && !light.flash ? light : (light.on ? currentLight : null);
+        io.emit('light', light);
+        vibrateIfAsked(data);
+        console.log(`Lumière : ${light.on ? `${light.mode} ${light.color}${light.flash ? ` flash ${light.flash} ms` : ''}${light.strobe ? ` strobe ${light.strobe} Hz` : ''}` : 'éteinte'}`);
+    });
+
+    // ── Admin : notification push à tous les abonnés ──
+    onAdmin(socket, 'push_notify', async (data) => {
+        const result = await pushToAll(sanitizeNotification(data));
+        socket.emit('push_result', result);
     });
 
     // ── Chat : rejoindre avec un pseudo ──
@@ -266,8 +569,6 @@ io.on('connection', (socket) => {
 //  ADMIN
 // ─────────────────────────────────────────
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'blast-admin';
-
 // Vider l'historique du chat
 app.post('/admin/clear-history', (req, res) => {
     const { password, check } = req.body;
@@ -295,7 +596,24 @@ app.post('/admin/stats', (req, res) => {
         onlineCount: connectedUsers.size,
         voteCount: votes.length,
         currentPoll: currentPoll,
+        socketCount: io.engine.clientsCount,
+        pushEnabled,
+        pushCount: pushSubscriptions.length,
+        currentImage,
+        currentCarton,
+        currentLight,
     });
+});
+
+// Notification push à tous les abonnés (même chose que l'événement socket push_notify)
+app.post('/admin/push', async (req, res) => {
+    const { password } = req.body;
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).send({ error: 'Mot de passe incorrect.' });
+    }
+    if (!pushEnabled) return res.status(503).send({ error: 'Notifications push non configurées.' });
+    const result = await pushToAll(sanitizeNotification(req.body));
+    res.send({ success: true, ...result });
 });
 
 // ─────────────────────────────────────────
@@ -443,6 +761,7 @@ app.post('/admin/clear-tweets', async (req, res) => {
 (async () => {
     await loadTemplates();
     await loadTweets();
+    await loadPushSubscriptions();
     server.listen(PORT, () => {
         console.log(`Serveur démarré sur http://localhost:${PORT}`);
     });
