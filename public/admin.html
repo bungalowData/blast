@@ -152,6 +152,29 @@
         .action-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
         .action-card p { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5; }
         .confirm-row { display: none; align-items: center; gap: 8px; margin-top: 10px; }
+        .btn-row { display: flex; gap: 8px; }
+        .btn-row .btn { flex: 1; }
+        .check-row {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; color: var(--text-muted); margin-bottom: 12px; cursor: pointer;
+        }
+        .check-row input { width: 16px; height: 16px; accent-color: var(--accent); }
+        .light-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-bottom: 12px; }
+        .light-grid label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); }
+        .light-grid select, .light-grid input[type=number] {
+            width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+            padding: 8px 10px; color: var(--text); font-size: 14px; font-family: var(--font);
+        }
+        .light-grid input[type=color] {
+            width: 100%; height: 36px; background: var(--bg); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 2px; cursor: pointer;
+        }
+        #admin-badge {
+            display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 8px;
+            border-radius: 20px; margin-bottom: 14px; background: var(--surface); color: var(--text-muted);
+        }
+        #admin-badge.ok { background: rgba(35, 165, 89, .18); color: var(--green); }
+        #admin-badge.ko { background: rgba(237, 66, 69, .18); color: var(--red); }
         .confirm-row.visible { display: flex; }
         .confirm-row span { font-size: 13px; color: var(--text-muted); flex: 1; }
 
@@ -452,6 +475,7 @@
 
             <!-- ── Général ── -->
             <div id="tab-general" class="tab-panel active">
+                <div id="admin-badge">Régie : connexion…</div>
                 <div class="stat-row">
                     <div class="stat">
                         <div class="label">En ligne</div>
@@ -465,7 +489,16 @@
                         <div class="label">Votes</div>
                         <div class="value" id="stat-votes">—</div>
                     </div>
+                    <div class="stat">
+                        <div class="label">Abonnés push</div>
+                        <div class="value" id="stat-push">—</div>
+                    </div>
                 </div>
+
+                <label class="check-row">
+                    <input type="checkbox" id="vibrate-with-actions" />
+                    📳 Faire vibrer les téléphones à chaque action (sondage, image, son, lumière)
+                </label>
 
                 <div class="action-card">
                     <h3>🗑️ Vider l'historique du chat</h3>
@@ -493,6 +526,52 @@
                     <h3>📳 Vibrer les téléphones</h3>
                     <p>Envoie une vibration sur tous les appareils connectés.</p>
                     <button class="btn btn-primary" id="vibrate-btn">Faire vibrer</button>
+                </div>
+
+                <div class="action-card">
+                    <h3>💡 Lumière</h3>
+                    <p>Allume l'écran des téléphones et/ou leur lampe torche (pour les spectateurs qui l'ont activée). Sans lampe, l'écran prend le relais.</p>
+                    <div class="light-grid">
+                        <div>
+                            <label for="light-mode">Source</label>
+                            <select id="light-mode">
+                                <option value="both">Écran + lampe</option>
+                                <option value="screen">Écran seul</option>
+                                <option value="torch">Lampe seule</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="light-color">Couleur de l'écran</label>
+                            <input id="light-color" type="color" value="#ffffff" />
+                        </div>
+                        <div>
+                            <label for="light-strobe">Stroboscope (Hz, 0 = fixe)</label>
+                            <input id="light-strobe" type="number" min="0" max="12" step="0.5" value="0" />
+                        </div>
+                        <div>
+                            <label for="light-flash">Durée du flash (ms)</label>
+                            <input id="light-flash" type="number" min="50" max="10000" step="50" value="300" />
+                        </div>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn btn-success" id="light-on-btn">Allumer</button>
+                        <button class="btn btn-primary" id="light-flash-btn">Flash</button>
+                        <button class="btn btn-danger" id="light-off-btn">Éteindre</button>
+                    </div>
+                </div>
+
+                <div class="action-card">
+                    <h3>🎬 Carton</h3>
+                    <p>Les cartons sont envoyés par la régie Unity, en même temps qu'à l'écran. Ce bouton les retire des téléphones.</p>
+                    <button class="btn btn-danger" id="hide-carton-btn">Masquer le carton</button>
+                </div>
+
+                <div class="action-card">
+                    <h3>🔔 Notification push</h3>
+                    <p>Envoie une notification aux spectateurs abonnés, même téléphone verrouillé.</p>
+                    <input id="push-title" class="field-input" type="text" maxlength="80" placeholder="Titre (ex : BLAST)" />
+                    <input id="push-body" class="field-input" type="text" maxlength="300" placeholder="Message" />
+                    <button class="btn btn-primary" id="push-send-btn">Envoyer la notification</button>
                 </div>
 
                 <div class="action-card">
@@ -555,6 +634,10 @@
                 <button class="add-response-btn" id="add-response-btn">+ Ajouter une réponse</button>
 
                 <!-- ── Actions ── -->
+                <label class="check-row" style="margin-top:12px">
+                    <input type="checkbox" id="poll-push" />
+                    🔔 Prévenir aussi les abonnés par notification push
+                </label>
                 <button class="btn-save-template" id="save-template-btn">💾 Sauvegarder comme template</button>
                 <button class="btn btn-success" id="launch-poll-btn">🚀 Lancer le sondage</button>
             </div>
@@ -574,16 +657,57 @@
 
 <div id="toast"></div>
 
+<script src="./js/blast-config.js"></script>
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
-    const SERVER = 'https://blast-mg48.onrender.com';
+    const SERVER = window.BLAST_SERVER;
     let adminPassword = null;
     let currentPoll = { question: '', reponses: [] };
     let resultsInterval = null;
     let responseCount = 2;
 
     // ── Socket ──
-    const socket = io(SERVER);
+    // Le mot de passe part avec chaque (re)connexion : sans lui, le serveur
+    // refuse les commandes de régie.
+    const socket = io(SERVER, {
+        auth: (cb) => cb(adminPassword ? { password: adminPassword } : {}),
+    });
+
+    function reconnectSocket() {
+        socket.disconnect();
+        socket.connect();
+    }
+
+    function setAdminBadge(state) {
+        const b = document.getElementById('admin-badge');
+        b.className = state === true ? 'ok' : state === false ? 'ko' : '';
+        b.textContent = state === true ? 'Régie : commandes autorisées'
+            : state === false ? 'Régie : commandes refusées par le serveur' : 'Régie : connexion…';
+    }
+
+    socket.on('admin_status', (s) => {
+        setAdminBadge(!!s.admin);
+        if (s.refused) showToast(`Commande refusée (${s.refused}) : reconnecte-toi.`, 'error');
+    });
+    socket.on('disconnect', () => setAdminBadge(null));
+    socket.on('push_result', (r) => {
+        if (r.disabled) showToast('Notifications push non configurées sur le serveur.', 'error');
+        else showToast(`🔔 ${r.sent} notification(s) envoyée(s)${r.failed ? `, ${r.failed} échec(s)` : ''}.`);
+        fetchStats();
+    });
+
+    // ── Vibration avec chaque action ──
+    const vibrateBox = document.getElementById('vibrate-with-actions');
+    try { vibrateBox.checked = localStorage.getItem('blast_admin_vibrate') === '1'; } catch (e) {}
+    vibrateBox.addEventListener('change', () => {
+        try { localStorage.setItem('blast_admin_vibrate', vibrateBox.checked ? '1' : '0'); } catch (e) {}
+    });
+
+    // Commande de régie : ajoute la vibration si la case est cochée
+    function regie(event, data = {}) {
+        if (vibrateBox.checked) data.vibrate = true;
+        socket.emit(event, data);
+    }
     socket.on('user_count', count => {
         document.getElementById('stat-online').textContent = count;
     });
@@ -619,6 +743,7 @@
                 return;
             }
             adminPassword = pwd;
+            reconnectSocket();
             showDashboard();
         } catch (e) {
             showToast('Impossible de joindre le serveur.', 'error');
@@ -630,6 +755,7 @@
         document.getElementById('dashboard-section').style.display = 'block';
         fetchStats();
         fetchTemplates();
+        fetchPresets();
         resultsInterval = setInterval(() => {
             if (currentPoll.reponses.length > 0) fetchResults();
         }, 5000);
@@ -647,6 +773,7 @@
                 document.getElementById('stat-messages').textContent = data.messageCount;
                 document.getElementById('stat-online').textContent = data.onlineCount;
                 document.getElementById('stat-votes').textContent = data.voteCount ?? '—';
+                document.getElementById('stat-push').textContent = data.pushEnabled ? data.pushCount : 'off';
                 if (data.currentPoll && data.currentPoll.question) {
                     currentPoll = data.currentPoll;
                     document.getElementById('poll-question-display').textContent = data.currentPoll.question;
@@ -733,75 +860,74 @@
         document.getElementById('clear-tweets-btn').style.display = 'block';
     });
 
-    // ── Presets images ──
-    const PRESET_IMAGES = [
-        'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/images/chatApp_images/Titre_WhiteOnBlack.png',
-        'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/images/chatApp_images/chatApp_instructions01.png',
-        'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/images/chatApp_images/BlastChat_instructions_02.png',
-        'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/images/chatApp_images/strobe01.gif',
-        'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/images/chatApp_images/strobe_blast.gif',
-        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image6.jpg',
-        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image7.jpg',
-        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image8.jpg',
-        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image9.jpg',
-        'https://pub-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.r2.dev/image10.jpg',
-    ];
+    // ── Presets images et sons ──
+    // La liste vit sur le serveur (server/presets.json), partagée avec la régie Unity.
+    async function fetchPresets() {
+        try {
+            const res = await fetch(`${SERVER}/presets`);
+            const data = await res.json();
+            renderPresets(data.images || []);
+            renderSounds(data.sounds || []);
+        } catch (e) {
+            showToast('Presets introuvables sur le serveur.', 'error');
+        }
+    }
 
-    (function renderPresets() {
+    function renderPresets(images) {
         const grid = document.getElementById('presets-grid');
-        PRESET_IMAGES.forEach((url, i) => {
-            if (!url) {
-                const empty = document.createElement('div');
-                empty.className = 'preset-empty';
-                empty.textContent = `${i + 1}`;
-                grid.appendChild(empty);
-                return;
-            }
+        grid.innerHTML = '';
+        images.forEach((img, i) => {
+            if (!img || !img.url) return;
             const thumb = document.createElement('div');
             thumb.className = 'preset-thumb';
-            thumb.dataset.url = url;
-            thumb.innerHTML = `<img src="${url}" alt="Preset ${i + 1}" loading="lazy" /><span class="preset-num">${i + 1}</span>`;
+            thumb.dataset.url = img.url;
+            thumb.title = img.label || '';
+            const el = document.createElement('img');
+            el.src = img.url;
+            el.alt = img.label || `Preset ${i + 1}`;
+            el.loading = 'lazy';
+            const num = document.createElement('span');
+            num.className = 'preset-num';
+            num.textContent = i + 1;
+            thumb.append(el, num);
             thumb.addEventListener('click', () => {
                 document.querySelectorAll('.preset-thumb').forEach(t => t.classList.remove('selected'));
                 thumb.classList.add('selected');
-                document.getElementById('image-url-input').value = url;
+                document.getElementById('image-url-input').value = img.url;
             });
             grid.appendChild(thumb);
         });
-    })();
+    }
 
-    // ── Sons (soundboard) ──
-    // { label, icon, url } — remplace les URL par tes fichiers MP3 sur le bucket R2.
-    const SOUND_PRESETS = [
-        { label: 'Move your ass', icon: '👏', url: 'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/sounds/moveYourAss.mp3' },
-        { label: 'Buzzer',           icon: '🔔', url: 'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/sounds/buzzer.mp3' },
-        { label: 'Tada',             icon: '🎉', url: 'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/sounds/tada.mp3' },
-        { label: 'Tambour',          icon: '🥁', url: 'https://pub-2865641d42d14fc8ac9146400573504a.r2.dev/sounds/drumroll.mp3' },
-    ];
-
-    (function renderSounds() {
+    function renderSounds(sounds) {
         const grid = document.getElementById('sounds-grid');
-        SOUND_PRESETS.forEach(sound => {
-            if (!sound.url || sound.url.includes('XXXX')) return;
+        grid.innerHTML = '';
+        sounds.forEach(sound => {
+            if (!sound || !sound.url) return;
             const btn = document.createElement('button');
             btn.className = 'sound-btn';
-            btn.innerHTML = `<span class="sound-icon">${sound.icon || '🔊'}</span><span>${sound.label}</span>`;
+            const icon = document.createElement('span');
+            icon.className = 'sound-icon';
+            icon.textContent = sound.icon || '🔊';
+            const label = document.createElement('span');
+            label.textContent = sound.label || sound.url;
+            btn.append(icon, label);
             btn.addEventListener('click', () => {
-                socket.emit('play_sound', { soundUrl: sound.url });
+                regie('play_sound', { soundUrl: sound.url });
                 showToast(`🔊 ${sound.label} diffusé !`);
             });
             grid.appendChild(btn);
         });
-    })();
+    }
 
     document.getElementById('stop-sound-btn').addEventListener('click', () => {
-        socket.emit('stop_sound');
+        regie('stop_sound');
         showToast('⏹ Lecture stoppée.', 'info');
     });
 
     // ── Vibrer ──
     document.getElementById('vibrate-btn').addEventListener('click', () => {
-        socket.emit('admin_vibrate');
+        socket.emit('admin_vibrate', {});
         showToast('📳 Vibration envoyée !');
     });
 
@@ -809,18 +935,57 @@
     document.getElementById('show-image-btn').addEventListener('click', () => {
         const imageUrl = document.getElementById('image-url-input').value.trim();
         if (!imageUrl) { showToast('Veuillez saisir une URL d\'image.', 'error'); return; }
-        socket.emit('show_image', { imageUrl });
+        regie('show_image', { imageUrl });
         showToast('🖼️ Image affichée !');
     });
 
     document.getElementById('hide-image-btn').addEventListener('click', () => {
-        socket.emit('hide_image');
+        regie('hide_image');
         showToast('Image masquée.', 'info');
+    });
+
+    // ── Lumière ──
+    function lightSettings() {
+        return {
+            mode: document.getElementById('light-mode').value,
+            color: document.getElementById('light-color').value,
+            strobe: parseFloat(document.getElementById('light-strobe').value) || 0,
+        };
+    }
+
+    document.getElementById('light-on-btn').addEventListener('click', () => {
+        regie('light', { on: true, ...lightSettings() });
+        showToast('💡 Lumière allumée.');
+    });
+    document.getElementById('light-flash-btn').addEventListener('click', () => {
+        const flash = parseInt(document.getElementById('light-flash').value, 10) || 300;
+        regie('light', { on: true, flash, ...lightSettings() });
+        showToast('⚡ Flash envoyé.');
+    });
+    document.getElementById('light-off-btn').addEventListener('click', () => {
+        socket.emit('light', { on: false });
+        showToast('Lumière éteinte.', 'info');
+    });
+
+    // ── Carton ──
+    document.getElementById('hide-carton-btn').addEventListener('click', () => {
+        socket.emit('hide_carton');
+        showToast('Carton masqué.', 'info');
+    });
+
+    // ── Notification push ──
+    document.getElementById('push-send-btn').addEventListener('click', () => {
+        const title = document.getElementById('push-title').value.trim() || 'BLAST';
+        const body = document.getElementById('push-body').value.trim();
+        if (!body) { showToast('Écris un message.', 'error'); return; }
+        socket.emit('push_notify', { title, body });
+        showToast('🔔 Envoi en cours…', 'info');
     });
 
     // ── Logout ──
     document.getElementById('logout-btn').addEventListener('click', () => {
         adminPassword = null;
+        reconnectSocket();
         clearInterval(resultsInterval);
         document.getElementById('dashboard-section').style.display = 'none';
         document.getElementById('login-section').style.display = 'block';
@@ -871,7 +1036,7 @@
         if (!question) { showToast('Veuillez saisir une question.', 'error'); return; }
         if (reponses.length < 2) { showToast('Au moins 2 réponses requises.', 'error'); return; }
 
-        socket.emit('nouveau_sondage', { question, reponses });
+        regie('nouveau_sondage', { question, reponses, push: document.getElementById('poll-push').checked });
         currentPoll = { question, reponses };
         showToast('🚀 Sondage lancé !');
 

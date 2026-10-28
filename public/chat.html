@@ -87,6 +87,18 @@
             transition: opacity 0.15s;
         }
         #tweet-link:hover { opacity: 1; }
+        #effects-btn {
+            display: none;
+            font-size: 18px;
+            line-height: 1;
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            opacity: 0.85;
+            transition: opacity 0.15s;
+        }
+        #effects-btn:hover { opacity: 1; }
 
         #online-badge {
             margin-left: auto;
@@ -498,6 +510,28 @@
         }
         #tutorial-next:hover { background: var(--accent-hover); }
         #tutorial-next:active { transform: scale(0.98); }
+        #tutorial-action {
+            display: none;
+            width: 100%;
+            background: transparent;
+            color: var(--text-normal, #dcddde);
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            padding: 11px;
+            margin-bottom: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: var(--font);
+            cursor: pointer;
+        }
+        #tutorial-action:disabled { opacity: .5; cursor: default; }
+        #tutorial-status {
+            display: none;
+            font-size: 13px;
+            margin: -4px 0 12px;
+            color: var(--text-muted);
+            white-space: pre-line;
+        }
 
         /* Colour palette for avatars */
         .c0 { background: #5865f2; }
@@ -529,7 +563,9 @@
     <div id="tutorial-modal">
         <h2 id="tutorial-title"></h2>
         <p id="tutorial-text"></p>
+        <div id="tutorial-status"></div>
         <div id="tutorial-progress"></div>
+        <button id="tutorial-action"></button>
         <button id="tutorial-next">Suivant</button>
     </div>
 </div>
@@ -537,6 +573,7 @@
 <div id="app">
     <div id="header">
         <a id="tweet-link" href="tweet.html" title="Rédiger ton tweet">✍️</a>
+        <button id="effects-btn" title="Effets du spectacle : lampe, notifications">✨</button>
         <div id="online-badge"><span class="dot"></span><span id="online-count">0 en ligne</span></div>
     </div>
 
@@ -565,6 +602,7 @@
     </div>
 </div>
 
+<script src="./js/blast-config.js"></script>
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
 <script>
@@ -580,7 +618,7 @@
     const typingUsers = new Set();
 
     // ── Socket ──
-    const socket = io('https://blast-mg48.onrender.com');
+    const socket = io(window.BLAST_SERVER);
 
     socket.on('connect', () => console.log('Socket connecté'));
     socket.on('connect_error', (e) => console.warn('Erreur socket:', e));
@@ -911,23 +949,101 @@
         }
     }
 
+    // ── Effets du spectacle (lampe, notifications) ──
+    // Gérés par la page principale (index_new.html) qui contient ce chat. Ouvert
+    // seul, sans elle, le chat n'en propose pas.
+    // L'iframe peut finir de charger avant sa page parente : on la cherche à la
+    // demande, jamais une fois pour toutes au démarrage.
+    function getBlastPhone() {
+        try { return window.parent !== window ? window.parent.BlastPhone || null : null; }
+        catch (e) { return null; }
+    }
+
+    (function setupEffectsButton(tries) {
+        const bp = getBlastPhone();
+        if (!bp) {
+            if (window.parent !== window && tries < 40) setTimeout(() => setupEffectsButton(tries + 1), 250);
+            return;
+        }
+        const fxBtn = document.getElementById('effects-btn');
+        fxBtn.style.display = 'block';
+        fxBtn.addEventListener('click', () => bp.openPanel());
+    })(0);
+
     // ── Tutoriel (affiché une seule fois par appareil) ──
     // Remplace/complète les textes ci-dessous selon tes besoins.
-    const TUTORIAL_PAGES = [
+    // Une page peut proposer une action : { label, run, status, done, disabled }
+    // et n'être montrée que si `when()` est vrai.
+    let blastPhone = null;
+    let TUTORIAL_PAGES = [];
+
+    function buildTutorialPages() {
+        blastPhone = getBlastPhone();
+        return [
         { title: 'Bienvenue dans BLAST 👋', text: 'Voici quelques infos pour bien démarrer.' },
         { title: 'Comment ça marche', text: 'Ici tu es dans un chat. \nÉcris ton message en bas et appuie sur envoyer.\nTu peux discuter avec nous, et avec les autres spectateurs.' },
         { title: 'Les regles du jeu', text: 'Tout propos diffamant ou discriminatoire est interdit et entraînera une exclusion par un modérateur.' },
         { title: 'Les sondages', text: 'Au cours du spectacle, on va régulierement te demander ton avis. Des sondages s\'afficheront ici et tu pourras faire ton choix en cliquant sur une réponse'},
+        {
+            title: 'Les effets lumineux 💡',
+            text: 'Pendant le spectacle, ton téléphone pourra s\'allumer avec la salle : son écran, et sa lampe torche si tu l\'actives.\nLe navigateur va te demander l\'accès à la caméra : aucune image n\'est enregistrée ni envoyée.',
+            when: () => blastPhone && blastPhone.torchSupported(),
+            action: {
+                label: 'Activer la lampe torche',
+                run: () => blastPhone.enableTorch(),
+                status: () => blastPhone.torchState() === 'off' ? '' : blastPhone.torchLabel(),
+                done: () => blastPhone.torchState() === 'ready',
+            },
+        },
+        {
+            title: 'Les notifications 🔔',
+            text: 'Reçois une alerte quand un sondage commence, même si ton téléphone est verrouillé.',
+            when: () => blastPhone && blastPhone.pushSupport() !== 'unsupported',
+            action: {
+                label: 'Activer les notifications',
+                run: () => blastPhone.enablePush(),
+                status: () => blastPhone.pushState() === 'off' ? '' : blastPhone.pushLabel(),
+                done: () => blastPhone.pushState() === 'on',
+                disabled: () => blastPhone.pushSupport() !== 'ok',
+            },
+        },
         { title: 'Le tweet', text: 'Si tu passes tous les niveaux du jeu tu pourras rediger ton propre tweet et astroturfer les internets avec nous. On te guidera en temps voulu pour cela ;)' },
-        { title: 'Pret??  C\'est parti !', text: 'Bon spectacle.' },
-    ];
-    const TUTORIAL_KEY = 'blast_tutorial_seen';
+        { title: 'Pret??  C\'est parti !', text: 'Bon spectacle.' + (blastPhone ? '\nLe bouton ✨ en haut te permet de régler la lampe et les notifications à tout moment.' : '') },
+        ].filter(p => !p.when || p.when());
+    }
+    // v2 : les pages lampe et notifications sont nouvelles, le tutoriel est
+    // remontré une fois à ceux qui l'avaient déjà vu.
+    const TUTORIAL_KEY = 'blast_tutorial_seen_v2';
     let tutorialIndex = 0;
+
+    function renderTutorialAction() {
+        const page = TUTORIAL_PAGES[tutorialIndex];
+        const btn = document.getElementById('tutorial-action');
+        const status = document.getElementById('tutorial-status');
+        const a = page && page.action;
+        if (!a) {
+            btn.style.display = 'none';
+            status.style.display = 'none';
+            return;
+        }
+        btn.style.display = 'block';
+        btn.textContent = a.done() ? '✅ Activé' : a.label;
+        btn.disabled = a.done() || (a.disabled ? a.disabled() : false);
+        const s = a.status();
+        status.textContent = s;
+        status.style.display = s ? 'block' : 'none';
+    }
+
+    document.getElementById('tutorial-action').addEventListener('click', () => {
+        const page = TUTORIAL_PAGES[tutorialIndex];
+        if (page && page.action) Promise.resolve(page.action.run()).then(renderTutorialAction);
+    });
 
     function renderTutorialPage() {
         const page = TUTORIAL_PAGES[tutorialIndex];
         document.getElementById('tutorial-title').textContent = page.title;
         document.getElementById('tutorial-text').textContent = page.text;
+        renderTutorialAction();
 
         const isLast = tutorialIndex === TUTORIAL_PAGES.length - 1;
         document.getElementById('tutorial-next').textContent = isLast ? 'Commencer' : 'Suivant';
@@ -942,7 +1058,10 @@
     }
 
     function startTutorialIfNeeded() {
-        if (!TUTORIAL_PAGES.length || localStorage.getItem(TUTORIAL_KEY)) return false;
+        if (localStorage.getItem(TUTORIAL_KEY)) return false;
+        TUTORIAL_PAGES = buildTutorialPages();
+        if (!TUTORIAL_PAGES.length) return false;
+        if (blastPhone) blastPhone.onChange(renderTutorialAction);
         tutorialIndex = 0;
         renderTutorialPage();
         document.getElementById('tutorial-overlay').classList.add('visible');
@@ -1061,8 +1180,10 @@
     });
 
     // ── Vibration déclenchée par l'admin ──
-    socket.on('vibrate', () => {
-        if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
+    socket.on('vibrate', (data) => {
+        if (!navigator.vibrate) return;
+        const pattern = data && Array.isArray(data.pattern) ? data.pattern : [400, 150, 400, 150, 400];
+        navigator.vibrate(pattern);
     });
 
     // ── Fermer le clavier quand une image est affichée ──

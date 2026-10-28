@@ -279,8 +279,9 @@
 
 <div id="toast"></div>
 
+<script src="./js/blast-config.js"></script>
 <script>
-    const SERVER = 'https://blast-mg48.onrender.com';
+    const SERVER = window.BLAST_SERVER;
     let myNickname = localStorage.getItem('blast_nickname');
 
     // ── Toast ──

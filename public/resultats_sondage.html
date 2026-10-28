@@ -86,14 +86,15 @@
         <button class="refresh-button" onclick="fetchResults()">Rafraîchir les Résultats</button>
     </div>
 
+    <script src="./js/blast-config.js"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script>
-        const socket = io('https://blast-mg48.onrender.com');
+        const socket = io(window.BLAST_SERVER);
         let currentPoll = { question: '', reponses: [] };
 
         // Fonction pour récupérer et afficher les résultats
         function fetchResults() {
-            fetch('https://blast-mg48.onrender.com/results')
+            fetch(window.BLAST_SERVER + '/results')
                 .then(response => response.json())
                 .then(data => {
                     const container = document.getElementById('results-container');

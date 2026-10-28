@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>BLAST</title>
     <link rel="icon" href="./favicon.ico">
+
+    <!-- Web-app installable (PWA) -->
+    <link rel="manifest" href="./manifest.webmanifest">
+    <meta name="theme-color" content="#000000">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BLAST">
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+
+    <!-- Polices des cartons : Futura Condensed ExtraBold existe sur iPhone ;
+         ailleurs, Barlow Condensed en est la plus proche des polices libres. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@800&family=EB+Garamond:ital@0;1&display=swap" rel="stylesheet">
     <style>
         body, html {
             margin: 0;
@@ -129,6 +144,111 @@
             max-height: 100%;
             object-fit: contain;
         }
+
+        /* ── Carton (le même qu'à l'écran) ── */
+        /* Sous le sondage : un vote lancé pendant un carton doit rester cliquable. */
+        #carton-overlay {
+            --k: 1;
+            position: fixed;
+            inset: 0;
+            z-index: 900;
+            background: #000;
+            color: #fff;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: max(6vw, env(safe-area-inset-top)) 7vw max(6vw, env(safe-area-inset-bottom));
+            box-sizing: border-box;
+            opacity: 0;
+            transition: opacity .4s ease;
+        }
+        #carton-overlay.visible { display: flex; }
+        #carton-overlay.shown { opacity: 1; }
+        #carton-box {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: calc(4vw * var(--k));
+        }
+        #carton-image {
+            display: block;
+            max-width: 100%;
+            max-height: 45vh;
+            object-fit: contain;
+            align-self: center;
+        }
+        #carton-titre, #carton-soustitre {
+            font-family: 'Futura-CondensedExtraBold', 'Futura Condensed ExtraBold', 'Barlow Condensed', 'Arial Narrow', sans-serif;
+            font-weight: 800;
+            font-stretch: condensed;
+            line-height: 0.95;
+            text-align: center;
+            overflow-wrap: anywhere;
+        }
+        #carton-titre { font-size: calc(15vw * var(--k)); }
+        #carton-soustitre { font-size: calc(10vw * var(--k)); }
+        #carton-texte, #carton-credit {
+            font-family: 'EB Garamond', Garamond, Georgia, serif;
+            white-space: pre-line;
+        }
+        #carton-texte { font-size: calc(5.6vw * var(--k)); line-height: 1.3; hyphens: auto; }
+        #carton-credit { font-size: calc(4vw * var(--k)); line-height: 1.3; font-style: italic; opacity: .85; }
+        #carton-overlay.titre-bas #carton-titre,
+        #carton-overlay.titre-bas #carton-soustitre { order: 3; }
+        #carton-overlay.titre-seul #carton-titre { font-size: calc(19vw * var(--k)); }
+
+        /* ── Lumière : au-dessus de tout, c'est le téléphone qui devient lampe ── */
+        #light-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 5000;
+            background: #fff;
+            display: none;
+        }
+        #light-overlay.on, #light-overlay.blink { display: block; }
+        #light-overlay.blink { opacity: .6; }
+
+        /* ── Panneau ✨ effets ── */
+        #effects-panel {
+            position: fixed;
+            inset: 0;
+            z-index: 3000;
+            background: rgba(0,0,0,.55);
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+        }
+        #effects-panel.open { display: flex; }
+        #effects-sheet {
+            width: 100%;
+            max-width: 480px;
+            background: #2F3136;
+            color: #DCDDDE;
+            border-radius: 14px 14px 0 0;
+            padding: 18px 18px max(18px, env(safe-area-inset-bottom));
+            box-sizing: border-box;
+            animation: sheetUp .2s ease;
+        }
+        @keyframes sheetUp { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+        #effects-sheet h2 { margin: 0 0 4px; font-size: 18px; color: #fff; }
+        #effects-sheet .fx-intro { margin: 0 0 14px; font-size: 13px; color: #B9BBBE; }
+        .fx-row { padding: 12px 0; border-top: 1px solid #40444B; }
+        .fx-row h3 { margin: 0 0 2px; font-size: 15px; color: #fff; }
+        .fx-row p { margin: 0 0 8px; font-size: 13px; color: #B9BBBE; }
+        .fx-status { font-size: 13px; margin-bottom: 8px; color: #DCDDDE; }
+        #effects-sheet button {
+            width: 100%;
+            padding: 10px 14px;
+            font-size: 14px;
+            font-family: inherit;
+            border: none;
+            border-radius: 6px;
+            background: #5865F2;
+            color: #fff;
+            cursor: pointer;
+        }
+        #effects-sheet button:disabled { opacity: .45; cursor: default; }
+        #effects-sheet #fx-close { background: #4F545C; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -156,10 +276,58 @@
         <p id="merci-message">✅ Merci pour votre vote !</p>
     </div>
 
+    <!-- Carton -->
+    <div id="carton-overlay" aria-live="polite">
+        <div id="carton-box">
+            <img id="carton-image" alt="" />
+            <div id="carton-titre"></div>
+            <div id="carton-soustitre"></div>
+            <div id="carton-texte"></div>
+            <div id="carton-credit"></div>
+        </div>
+    </div>
+
+    <!-- Panneau ✨ : lampe, notifications, installation -->
+    <div id="effects-panel" role="dialog" aria-modal="true" aria-labelledby="fx-title">
+        <div id="effects-sheet">
+            <h2 id="fx-title">✨ Effets du spectacle</h2>
+            <p class="fx-intro">Ton téléphone peut participer au spectacle.</p>
+
+            <div class="fx-row">
+                <h3>💡 Lampe torche</h3>
+                <p>La régie pourra allumer la lampe de ton téléphone. Le navigateur va demander l'accès à la caméra : aucune image n'est enregistrée ni envoyée.</p>
+                <div class="fx-status" id="fx-torch-status"></div>
+                <button id="fx-torch-btn">Activer la lampe</button>
+            </div>
+
+            <div class="fx-row">
+                <h3>🔔 Notifications</h3>
+                <p>Une alerte quand un sondage commence, même téléphone verrouillé.</p>
+                <div class="fx-status" id="fx-push-status"></div>
+                <button id="fx-push-btn">Activer les notifications</button>
+            </div>
+
+            <div class="fx-row" id="fx-install-row">
+                <h3>📲 Installer BLAST</h3>
+                <p id="fx-install-hint">Sur iPhone : touche Partager puis « Sur l'écran d'accueil ».</p>
+                <button id="fx-install-btn">Installer l'application</button>
+            </div>
+
+            <button id="fx-close">Fermer</button>
+        </div>
+    </div>
+
+    <!-- Lumière (écran coloré) : tout au-dessus -->
+    <div id="light-overlay"></div>
+
+    <script src="./js/blast-config.js"></script>
+    <script src="./js/blast-phone.js"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script>
 
-        const socket = io('https://blast-mg48.onrender.com');
+        const socket = io(window.BLAST_SERVER);
+        BlastPhone.attach(socket);
+        BlastPhone.init();
 
         socket.on('connect', () => {
             console.log('Socket connecté (sondage)');
@@ -203,7 +371,7 @@
                 b.style.opacity = '0.5';
             });
 
-            fetch('https://blast-mg48.onrender.com/vote', {
+            fetch(window.BLAST_SERVER + '/vote', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ option }),
