@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat</title>
+    <script>
+        // Dans la page BLAST (iframe), c'est son accueil qui demande le pseudo :
+        // la modale du chat reste cachée, sauf repli (voir linkParent plus bas).
+        if (window.parent !== window) document.documentElement.classList.add('ob-wait');
+    </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap');
 
@@ -448,6 +453,41 @@
         }
         #nickname-submit:hover { background: var(--accent-hover); }
         #nickname-submit:active { transform: scale(0.98); }
+        .ob-wait #nickname-overlay { display: none !important; }
+
+        /* ── Pseudo repris ailleurs (l'app, un autre onglet) ── */
+        #moved-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+        #moved-overlay.visible { display: flex; }
+        #moved-overlay .box {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 28px 24px;
+            width: 380px;
+            max-width: 92vw;
+            box-shadow: var(--shadow);
+        }
+        #moved-overlay h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+        #moved-overlay p { font-size: 15px; line-height: 1.5; color: var(--text-secondary); margin-bottom: 20px; }
+        #moved-overlay button {
+            width: 100%;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: var(--font);
+            cursor: pointer;
+        }
 
         /* ── Tutoriel ── */
         #tutorial-overlay {
@@ -510,28 +550,6 @@
         }
         #tutorial-next:hover { background: var(--accent-hover); }
         #tutorial-next:active { transform: scale(0.98); }
-        #tutorial-action {
-            display: none;
-            width: 100%;
-            background: transparent;
-            color: var(--text-normal, #dcddde);
-            border: 1px solid var(--accent);
-            border-radius: 6px;
-            padding: 11px;
-            margin-bottom: 8px;
-            font-size: 15px;
-            font-weight: 600;
-            font-family: var(--font);
-            cursor: pointer;
-        }
-        #tutorial-action:disabled { opacity: .5; cursor: default; }
-        #tutorial-status {
-            display: none;
-            font-size: 13px;
-            margin: -4px 0 12px;
-            color: var(--text-muted);
-            white-space: pre-line;
-        }
 
         /* Colour palette for avatars */
         .c0 { background: #5865f2; }
@@ -558,15 +576,22 @@
     </div>
 </div>
 
-<!-- Tutoriel (affiché une seule fois après le login) -->
+<!-- Tutoriel du chat ouvert seul (dans la page BLAST, c'est son accueil qui le montre) -->
 <div id="tutorial-overlay">
     <div id="tutorial-modal">
         <h2 id="tutorial-title"></h2>
         <p id="tutorial-text"></p>
-        <div id="tutorial-status"></div>
         <div id="tutorial-progress"></div>
-        <button id="tutorial-action"></button>
         <button id="tutorial-next">Suivant</button>
+    </div>
+</div>
+
+<!-- Pseudo repris par l'app ou un autre onglet -->
+<div id="moved-overlay" role="dialog" aria-modal="true">
+    <div class="box">
+        <h2 id="moved-title"></h2>
+        <p id="moved-text"></p>
+        <button id="moved-back"></button>
     </div>
 </div>
 
@@ -603,6 +628,7 @@
 </div>
 
 <script src="./js/blast-config.js"></script>
+<script src="./js/blast-textes.js"></script>
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
 <script>
@@ -742,7 +768,12 @@
     });
 
     // ── History on join ──
+    // Renvoyé à chaque (re)connexion du pseudo : il remplace ce qui est affiché,
+    // sinon une reprise après coupure doublerait les messages.
     socket.on('history', (messages) => {
+        document.getElementById('messages-list').innerHTML = '';
+        lastAuthor = null;
+        lastTimestamp = 0;
         messages.forEach(m => appendMessage(m, false));
         scrollBottom();
     });
@@ -768,21 +799,27 @@
         document.getElementById('online-count').textContent = count + ' en ligne';
     });
 
-    // ── Nickname taken ──
-    socket.on('nickname_taken', () => {
-        // Annuler l'éventuelle entrée automatique en mode dégradé
-        clearTimeout(joinTimeout);
-        // Réafficher la modale (utile si on avait tenté une connexion auto)
-        document.getElementById('nickname-overlay').style.display = 'flex';
-        document.getElementById('nickname-error').style.display = 'block';
-        document.getElementById('nickname-submit').disabled = false;
-        document.getElementById('nickname-submit').textContent = 'Rejoindre le chat';
-        document.getElementById('nickname-input').focus();
+    // ── Réponses du serveur au pseudo (voir joinAs plus bas) ──
+    socket.on('join_success', () => {
+        const p = pendingJoin;
+        if (p) { setJoined(p.nick); p.done('ok'); }
     });
 
-    // ── Join success ──
-    socket.on('join_success', () => {
-        joinSuccess();
+    socket.on('nickname_taken', () => {
+        if (pendingJoin) pendingJoin.done('taken');
+    });
+
+    // Le même pseudo vient d'être repris depuis ce téléphone, ailleurs : l'app
+    // installée, ou un autre onglet. Ce chat-ci ne parle plus en son nom.
+    socket.on('session_replaced', () => {
+        joined = false;
+        showMoved();
+    });
+
+    // Retour du réseau : le serveur a oublié ce socket, on reprend le pseudo
+    socket.on('connect', () => {
+        if (!joined || !myNickname || pendingJoin) return;
+        joinAs(myNickname).then(r => { if (r === 'taken') lostNickname(); });
     });
 
     // ── System messages ──
@@ -938,16 +975,113 @@
 
     document.getElementById('send-btn').addEventListener('click', sendMessage);
 
-    // ── Nickname modal ──
-    let joinTimeout = null;
+    // ── Pseudo ──
+    // Dans la page BLAST, c'est son accueil (js/blast-onboarding.js) qui décide
+    // quand rejoindre le chat : il appelle BlastChat.join(). Ainsi aucun pseudo
+    // n'est réservé dans le navigateur avant l'installation de l'app.
+    // Ouvert seul (ou si l'accueil ne répond pas), le chat garde sa modale.
+    const TX = self.BLAST_TEXTES || {};
+    const FRAMED = window.parent !== window;
+    let joined = false;        // ce socket porte notre pseudo côté serveur
+    let pendingJoin = null;    // { nick, done(résultat), timer }
+    let legacy = false;        // pas d'accueil BLAST autour : modale du chat
 
-    function joinSuccess() {
-        clearTimeout(joinTimeout);
-        document.getElementById('nickname-overlay').style.display = 'none';
-        if (!startTutorialIfNeeded()) {
-            document.getElementById('message-input').focus();
+    function storeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function storeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
+
+    // Identifie ce téléphone (pas la personne) : le serveur laisse un même
+    // téléphone reprendre son pseudo, par exemple en passant du navigateur à
+    // l'app (Android : même mémoire).
+    function deviceId() {
+        let id = storeGet('blast_device');
+        if (!id) {
+            id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+                : Date.now().toString(36) + Math.random().toString(36).slice(2);
+            storeSet('blast_device', id);
         }
+        return id;
     }
+
+    function setJoined(nick) {
+        joined = true;
+        myNickname = nick;
+        myColor = getColorClass(nick);
+        storeSet('blast_nickname', nick);
+    }
+
+    // → Promise : 'ok' | 'taken' | 'invalid' | 'cancelled'
+    // Attend la connexion (serveur endormi : jusqu'à une minute).
+    function joinAs(nick) {
+        nick = String(nick || '').trim().slice(0, 32);
+        if (!nick) return Promise.resolve('invalid');
+        if (pendingJoin) pendingJoin.done('cancelled');
+        return new Promise(resolve => {
+            const p = { nick };
+            p.done = (r) => {
+                clearTimeout(p.timer);
+                if (pendingJoin === p) pendingJoin = null;
+                resolve(r);
+            };
+            pendingJoin = p;
+            const send = () => {
+                if (pendingJoin !== p) return;
+                socket.emit('join', { nickname: nick, device: deviceId() });
+                // Serveur muet (ancienne version sans réponse) : on entre quand même
+                p.timer = setTimeout(() => { setJoined(nick); p.done('ok'); }, 5000);
+            };
+            if (socket.connected) send(); else socket.once('connect', send);
+        });
+    }
+
+    function parentOnboarding() {
+        try { return FRAMED ? window.parent.BlastOnboarding || null : null; }
+        catch (e) { return null; }
+    }
+
+    // Le pseudo a été pris entre deux connexions : on en redemande un
+    function lostNickname() {
+        joined = false;
+        const ob = parentOnboarding();
+        if (ob && !legacy) ob.askNickname('taken');
+        else showLegacyModal(true);
+    }
+
+    // ── Pseudo repris ailleurs ──
+    function showMoved() {
+        const t = TX.ailleurs || {};
+        document.getElementById('moved-title').textContent = t.titre || 'BLAST est ouvert ailleurs';
+        document.getElementById('moved-text').textContent = t.texte || '';
+        document.getElementById('moved-back').textContent = t.bouton || 'Revenir ici';
+        document.getElementById('moved-overlay').classList.add('visible');
+    }
+
+    document.getElementById('moved-back').addEventListener('click', () => {
+        unlockAudio();
+        document.getElementById('moved-overlay').classList.remove('visible');
+        joinAs(myNickname || storeGet('blast_nickname')).then(r => { if (r !== 'ok') lostNickname(); });
+    });
+
+    // ── Son de test (accueil) : un lecteur à part, que le déverrouillage
+    //    des autres ne vient pas interrompre ──
+    const testPlayer = new Audio(NOTIF_RECEIVE_URL);
+    testPlayer.preload = 'auto';
+    function testSound() {
+        try {
+            testPlayer.currentTime = 0;
+            testPlayer.play().catch(e => console.warn('Son de test bloqué :', e));
+        } catch (e) { /* ignore */ }
+    }
+
+    // Ce que l'accueil de la page BLAST pilote
+    window.BlastChat = {
+        join: joinAs,
+        savedNickname: () => storeGet('blast_nickname') || '',
+        nickname: () => myNickname,
+        joined: () => joined,
+        unlockAudio,
+        testSound,
+        focus: () => document.getElementById('message-input').focus(),
+    };
 
     // ── Effets du spectacle (lampe, notifications) ──
     // Gérés par la page principale (index_new.html) qui contient ce chat. Ouvert
@@ -970,103 +1104,24 @@
         fxBtn.addEventListener('click', () => bp.openPanel());
     })(0);
 
-    // ── Tutoriel (affiché une seule fois par appareil) ──
-    // Remplace/complète les textes ci-dessous selon tes besoins.
-    // Une page peut proposer une action : { label, run, status, done, disabled }
-    // et n'être montrée que si `when()` est vrai.
-    let blastPhone = null;
+    // ── Chat ouvert seul : la modale et un petit tutoriel ──
+    // Les textes du tutoriel sont ceux de l'accueil (js/blast-textes.js, « tuto »).
+    const TUTORIAL_KEY = 'blast_tutorial_seen_v4';
     let TUTORIAL_PAGES = [];
-
-    function buildTutorialPages() {
-        blastPhone = getBlastPhone();
-        return [
-        { title: 'Bienvenue dans BLAST 👋', text: 'Voici quelques infos pour bien démarrer.' },
-        { title: 'Comment ça marche', text: 'Ici tu es dans un chat. \nÉcris ton message en bas et appuie sur envoyer.\nTu peux discuter avec nous, et avec les autres spectateurs.' },
-        { title: 'Les regles du jeu', text: 'Tout propos diffamant ou discriminatoire est interdit et entraînera une exclusion par un modérateur.' },
-        { title: 'Les sondages', text: 'Au cours du spectacle, on va régulierement te demander ton avis. Des sondages s\'afficheront ici et tu pourras faire ton choix en cliquant sur une réponse'},
-        // Sur iPhone, pas de bouton possible : seulement la marche à suivre. Avant
-        // les notifications, qui y exigent BLAST installé.
-        blastPhone && blastPhone.isIOS() ? {
-            title: 'Installer BLAST 📲',
-            text: 'Ajoute BLAST à ton écran d\'accueil : il s\'ouvrira en plein écran, comme une application, et c\'est indispensable sur iPhone pour recevoir les notifications.\n' +
-                blastPhone.iosInstallHint() + '\nOuvre ensuite BLAST depuis la nouvelle icône.',
-            when: () => blastPhone.installSuggested(),
-        } : {
-            title: 'Installer BLAST 📲',
-            text: 'Ajoute BLAST à ton écran d\'accueil : il s\'ouvrira en plein écran, comme une application, et tu le retrouveras d\'un geste pendant le spectacle.',
-            when: () => blastPhone && blastPhone.installSuggested(),
-            action: {
-                label: 'Installer l\'application',
-                doneLabel: '✅ Installée',
-                run: () => blastPhone.install(),
-                status: () => blastPhone.installLabel(),
-                done: () => blastPhone.installed(),
-                disabled: () => !blastPhone.canInstall(),
-            },
-        },
-        {
-            title: 'Les effets lumineux 💡',
-            text: 'Pendant le spectacle, ton téléphone pourra s\'allumer avec la salle : son écran, et sa lampe torche si tu l\'actives.\nLe navigateur va te demander l\'accès à la caméra : aucune image n\'est enregistrée ni envoyée, et la caméra reste fermée tant que la régie n\'en a pas besoin.',
-            when: () => blastPhone && blastPhone.torchSupported(),
-            action: {
-                label: 'Activer la lampe torche',
-                run: () => blastPhone.enableTorch(),
-                status: () => blastPhone.torchState() === 'off' ? '' : blastPhone.torchLabel(),
-                done: () => blastPhone.torchEnabled(),
-            },
-        },
-        {
-            title: 'Les notifications 🔔',
-            text: 'Reçois une alerte quand un sondage commence, même si ton téléphone est verrouillé.',
-            when: () => blastPhone && blastPhone.pushSupport() !== 'unsupported',
-            action: {
-                label: 'Activer les notifications',
-                run: () => blastPhone.enablePush(),
-                status: () => blastPhone.pushState() === 'off' ? '' : blastPhone.pushLabel(),
-                done: () => blastPhone.pushState() === 'on',
-                disabled: () => blastPhone.pushSupport() !== 'ok',
-            },
-        },
-        { title: 'Le tweet', text: 'Si tu passes tous les niveaux du jeu tu pourras rediger ton propre tweet et astroturfer les internets avec nous. On te guidera en temps voulu pour cela ;)' },
-        { title: 'Pret??  C\'est parti !', text: 'Bon spectacle.' + (blastPhone ? '\nLe bouton ✨ en haut te permet de régler la lampe, les notifications et l\'installation à tout moment.' : '') },
-        ].filter(p => !p.when || p.when());
-    }
-    // v3 : la page « Installer BLAST » est nouvelle, le tutoriel est remontré une
-    // fois à ceux qui l'avaient déjà vu (v2 : lampe et notifications).
-    const TUTORIAL_KEY = 'blast_tutorial_seen_v3';
     let tutorialIndex = 0;
 
-    function renderTutorialAction() {
-        const page = TUTORIAL_PAGES[tutorialIndex];
-        const btn = document.getElementById('tutorial-action');
-        const status = document.getElementById('tutorial-status');
-        const a = page && page.action;
-        if (!a) {
-            btn.style.display = 'none';
-            status.style.display = 'none';
-            return;
-        }
-        btn.style.display = 'block';
-        btn.textContent = a.done() ? (a.doneLabel || '✅ Activé') : a.label;
-        btn.disabled = a.done() || (a.disabled ? a.disabled() : false);
-        const s = a.status();
-        status.textContent = s;
-        status.style.display = s ? 'block' : 'none';
+    function fillPseudo(s) {
+        return String(s || '').replace(/\{pseudo\}/g, myNickname || '');
     }
-
-    document.getElementById('tutorial-action').addEventListener('click', () => {
-        const page = TUTORIAL_PAGES[tutorialIndex];
-        if (page && page.action) Promise.resolve(page.action.run()).then(renderTutorialAction);
-    });
 
     function renderTutorialPage() {
         const page = TUTORIAL_PAGES[tutorialIndex];
         document.getElementById('tutorial-title').textContent = page.title;
         document.getElementById('tutorial-text').textContent = page.text;
-        renderTutorialAction();
 
         const isLast = tutorialIndex === TUTORIAL_PAGES.length - 1;
-        document.getElementById('tutorial-next').textContent = isLast ? 'Commencer' : 'Suivant';
+        document.getElementById('tutorial-next').textContent = isLast
+            ? (TX.tutoBoutonFin || 'Commencer') : (TX.suivant || 'Suivant');
 
         const progress = document.getElementById('tutorial-progress');
         progress.innerHTML = '';
@@ -1078,10 +1133,12 @@
     }
 
     function startTutorialIfNeeded() {
-        if (localStorage.getItem(TUTORIAL_KEY)) return false;
-        TUTORIAL_PAGES = buildTutorialPages();
+        if (storeGet(TUTORIAL_KEY)) return false;
+        TUTORIAL_PAGES = (TX.tuto || []).map(p => ({
+            title: [p.icone, fillPseudo(p.titre)].filter(Boolean).join(' '),
+            text: fillPseudo(p.texte),
+        }));
         if (!TUTORIAL_PAGES.length) return false;
-        if (blastPhone) blastPhone.onChange(renderTutorialAction);
         tutorialIndex = 0;
         renderTutorialPage();
         document.getElementById('tutorial-overlay').classList.add('visible');
@@ -1089,7 +1146,7 @@
     }
 
     function finishTutorial() {
-        localStorage.setItem(TUTORIAL_KEY, '1');
+        storeSet(TUTORIAL_KEY, '1');
         document.getElementById('tutorial-overlay').classList.remove('visible');
         document.getElementById('message-input').focus();
     }
@@ -1103,44 +1160,64 @@
         }
     });
 
-    function doJoin(val) {
+    function showLegacyModal(taken) {
+        legacy = true;
+        document.documentElement.classList.remove('ob-wait');
+        document.getElementById('nickname-overlay').style.display = 'flex';
+        document.getElementById('nickname-error').style.display = taken ? 'block' : 'none';
+        document.getElementById('nickname-submit').disabled = false;
+        document.getElementById('nickname-submit').textContent = 'Rejoindre le chat';
+        document.getElementById('nickname-input').focus();
+    }
+
+    function legacyJoined() {
+        document.getElementById('nickname-overlay').style.display = 'none';
+        if (!startTutorialIfNeeded()) document.getElementById('message-input').focus();
+    }
+
+    function legacyJoin(val) {
         document.getElementById('nickname-error').style.display = 'none';
         document.getElementById('nickname-submit').disabled = true;
         document.getElementById('nickname-submit').textContent = 'Connexion…';
-        myNickname = val;
-        myColor = getColorClass(val);
-        localStorage.setItem('blast_nickname', val);
-        socket.emit('join', { nickname: val });
-
-        // Fallback : si le serveur ne connaît pas encore l'événement 'join'
-        // (ancienne version non déployée), on entre quand même après 1,5 s
-        joinTimeout = setTimeout(() => {
-            console.warn('Pas de réponse join_success — entrée en mode dégradé');
-            joinSuccess();
-        }, 1500);
+        joinAs(val).then(r => {
+            if (r === 'ok') legacyJoined();
+            else if (r !== 'cancelled') showLegacyModal(r === 'taken');
+        });
     }
 
     function submitNickname() {
         const val = document.getElementById('nickname-input').value.trim();
         if (!val) return;
         unlockAudio(); // déverrouille l'audio (geste utilisateur fiable)
-        doJoin(val);
+        legacyJoin(val);
     }
 
-    // Réutiliser le pseudo déjà choisi (ex. au retour depuis tweet.html) :
-    // connexion automatique sans repasser par la modale. En cas de pseudo
-    // déjà pris, le handler 'nickname_taken' réaffichera la modale.
-    const savedNickname = localStorage.getItem('blast_nickname');
-    if (savedNickname) {
-        document.getElementById('nickname-input').value = savedNickname;
-        document.getElementById('nickname-overlay').style.display = 'none';
-        doJoin(savedNickname);
+    function startLegacy() {
+        legacy = true;
+        document.documentElement.classList.remove('ob-wait');
+        // Réutiliser le pseudo déjà choisi : connexion automatique sans repasser
+        // par la modale ; s'il est pris, la modale revient.
+        const saved = storeGet('blast_nickname');
+        if (saved) {
+            document.getElementById('nickname-input').value = saved;
+            document.getElementById('nickname-overlay').style.display = 'none';
+            legacyJoin(saved);
+        }
     }
 
     document.getElementById('nickname-submit').addEventListener('click', submitNickname);
     document.getElementById('nickname-input').addEventListener('keydown', e => {
         if (e.key === 'Enter') submitNickname();
     });
+
+    // L'accueil de la page BLAST prend la main dès qu'il est là ; s'il manque
+    // (chat ouvert seul, page parente en panne), la modale du chat sert.
+    (function linkParent(tries) {
+        const ob = parentOnboarding();
+        if (ob) { ob.chatReady(window.BlastChat); return; }
+        if (FRAMED && tries < 40) { setTimeout(() => linkParent(tries + 1), 250); return; }
+        startLegacy();
+    })(0);
 
     // ── Emoji picker ──
     const emojiBtn = document.getElementById('emoji-btn');

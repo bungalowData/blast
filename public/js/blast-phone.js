@@ -8,8 +8,9 @@
 // de la vibration sur iPhone. S'y ajoutent ce qui demande l'accord du
 // spectateur : la lampe (caméra), les notifications push, l'installation.
 //
-// Le chat (chat.html, dans l'iframe) appelle window.parent.BlastPhone pour son
-// tutoriel et son bouton ✨ : même origine, donc accès direct.
+// L'accueil (blast-onboarding.js) s'en sert pour ses écrans de réglages ; le
+// chat (chat.html, dans l'iframe) appelle window.parent.BlastPhone pour son
+// bouton ✨ : même origine, donc accès direct.
 //
 // Rien ici ne doit casser la page si une API manque : chaque fonction teste ce
 // dont elle a besoin et se replie sur l'écran.
@@ -260,9 +261,22 @@
         torch.lit = false;
     }
 
-    // L'activation par le spectateur (tuto ou ✨), dans son geste : c'est le
+    // Un bref éclair de la lampe : la preuve, pour le spectateur, que ça marche
+    function testBlink(track) {
+        return track.applyConstraints({ advanced: [{ torch: true }] }).then(function () {
+            return new Promise(function (r) { setTimeout(r, 400); });
+        }).then(function () {
+            return track.applyConstraints({ advanced: [{ torch: false }] });
+        }).catch(function (e) {
+            console.warn('Éclair de test impossible :', e);
+        });
+    }
+
+    // L'activation par le spectateur (accueil ou ✨), dans son geste : c'est le
     // seul moment où la demande d'accès doit apparaître.
-    function enableTorch() {
+    // { test: true } : la lampe clignote une fois avant que la caméra se referme.
+    function enableTorch(opts) {
+        var test = !!(opts && opts.test);
         if (!torchSupported()) { setTorchState('unavailable'); return Promise.resolve(torch.state); }
         if (torchEnabled() && torch.state !== 'blocked') return Promise.resolve(torch.state);
         setTorchState('pending');
@@ -274,14 +288,16 @@
             }
             store.set('blast_torch', 'on');
             rememberDevice(cam.track);
-            if (serverArmed && document.visibilityState === 'visible') {
-                holdCamera(cam);
-            } else {
-                // L'accès est acquis : la caméra se referme jusqu'à l'armement
-                stopStream(cam.stream);
-                setTorchState('standby');
-            }
-            return torch.state;
+            return (test ? testBlink(cam.track) : Promise.resolve()).then(function () {
+                if (serverArmed && document.visibilityState === 'visible') {
+                    holdCamera(cam);
+                } else {
+                    // L'accès est acquis : la caméra se referme jusqu'à l'armement
+                    stopStream(cam.stream);
+                    setTorchState('standby');
+                }
+                return torch.state;
+            });
         }).catch(function (e) {
             console.warn('Lampe torche indisponible :', e);
             setTorchState(isDenied(e) ? 'denied' : 'unavailable');
@@ -431,12 +447,25 @@
     // un bref éclair d'écran signale l'action de la régie.
     function handleVibrate() {
         if ('vibrate' in navigator) return;
+        blinkScreen();
+    }
+
+    function blinkScreen() {
         if (lightState) return;
         var o = $('light-overlay');
         if (!o) return;
         o.style.background = '#ffffff';
         o.classList.add('blink');
         setTimeout(function () { o.classList.remove('blink'); }, 160);
+    }
+
+    // Vibre là où c'est possible, un éclair d'écran ailleurs (test de l'accueil)
+    function buzz(pattern) {
+        if ('vibrate' in navigator) {
+            try { navigator.vibrate(pattern || 200); } catch (e) { }
+        } else {
+            blinkScreen();
+        }
     }
 
     // ─────────────────────────────────────────
@@ -668,16 +697,74 @@
         changed();
     });
 
+    // → 'accepted' | 'dismissed' | 'unavailable' (le navigateur n'a rien proposé)
     function install() {
-        if (!installPrompt) return Promise.resolve(false);
+        if (!installPrompt) return Promise.resolve('unavailable');
         var p = installPrompt;
         installPrompt = null;
         p.prompt();
         return p.userChoice.then(function (c) {
-            if (c && c.outcome === 'accepted') installed = true;
+            var outcome = c && c.outcome === 'accepted' ? 'accepted' : 'dismissed';
+            if (outcome === 'accepted') installed = true;
             changed();
-            return installed;
+            return outcome;
+        }, function () {
+            changed();
+            return 'dismissed';
         });
+    }
+
+    // L'app est-elle installée sur ce téléphone ? Android (Chrome) sait le dire
+    // à la page, grâce à related_applications dans le manifeste. Ailleurs : null,
+    // on ne sait pas.
+    function appInstalled() {
+        if (!navigator.getInstalledRelatedApps) return Promise.resolve(null);
+        return Promise.race([
+            navigator.getInstalledRelatedApps().then(function (apps) { return apps.length > 0; }, function () { return null; }),
+            new Promise(function (r) { setTimeout(function () { r(null); }, 1500); }),
+        ]);
+    }
+
+    // ─────────────────────────────────────────
+    //  QUEL TÉLÉPHONE, QUEL NAVIGATEUR
+    // ─────────────────────────────────────────
+    function isAndroid() {
+        return /Android/i.test(navigator.userAgent);
+    }
+
+    function isMobile() {
+        return isIOS() || isAndroid() || /Mobi/i.test(navigator.userAgent);
+    }
+
+    // Navigateurs intégrés aux applis (Instagram, Facebook, TikTok, appli
+    // Google…) : ils ne savent pas installer, et perdent souvent les permissions.
+    function inAppBrowser() {
+        return /FBAN|FBAV|FB_IAB|Instagram|Line\/|Snapchat|TikTok|musical_ly|Twitter|LinkedInApp|Pinterest|GSA\/|; wv\)/i
+            .test(navigator.userAgent);
+    }
+
+    // Sur iPhone, le chemin vers « Sur l'écran d'accueil » dépend du navigateur :
+    //  safari   : bouton Partager en bas, au milieu
+    //  safari26 : Safari d'iOS 26, Partager est rangé dans le menu ···
+    //  autre    : Chrome, Edge… : Partager en haut, près de l'adresse
+    //  aucun    : Brave, Firefox… : il faut passer par Safari
+    function iosBrowser() {
+        var ua = navigator.userAgent;
+        if (isBrave() || /FxiOS|OPiOS|OPT\/|DuckDuckGo|GSA\//.test(ua)) return 'aucun';
+        if (/CriOS|EdgiOS/.test(ua)) return 'autre';
+        var v = /Version\/(\d+)/.exec(ua);
+        return v && +v[1] >= 26 ? 'safari26' : 'safari';
+    }
+
+    // Le nom du navigateur où l'on se trouve, et de celui où il faut aller
+    function browserName() {
+        var ua = navigator.userAgent;
+        if (/CriOS/.test(ua)) return 'Chrome';
+        if (/EdgiOS|EdgA\//.test(ua)) return 'Edge';
+        if (/SamsungBrowser/.test(ua)) return 'Samsung Internet';
+        if (/Firefox|FxiOS/.test(ua)) return 'Firefox';
+        if (isIOS()) return 'Safari';
+        return 'Chrome';
     }
 
     // Vaut-il la peine de proposer l'installation ? Pas dans l'app installée,
@@ -765,14 +852,15 @@
             pb.textContent = push.state === 'on' ? 'Désactiver' : 'Activer les notifications';
             pb.disabled = push.state === 'pending' || push.state === 'unsupported' || push.state === 'ios-install';
 
-            // iPhone : la marche à suivre ; ailleurs : le bouton, grisé tant que le
-            // navigateur n'a pas fait sa proposition
-            var ios = isIOS();
-            $('fx-install-row').style.display = installSuggested() || installed ? '' : 'none';
+            // Le bouton installe directement quand le navigateur le permet ; sinon
+            // (iPhone, menu du navigateur) il ouvre la marche à suivre illustrée
+            // de l'accueil.
+            var guide = !installPrompt && !!window.BlastOnboarding;
+            $('fx-install-row').style.display = !installed && installSuggested() ? '' : 'none';
             var ib = $('fx-install-btn');
-            ib.style.display = ios ? 'none' : '';
-            ib.disabled = !installPrompt;
-            var hint = ios ? iosInstallHint() : installLabel();
+            ib.textContent = guide ? 'Voir comment faire' : 'Installer l\'application';
+            ib.disabled = !installPrompt && !guide;
+            var hint = isIOS() ? iosInstallHint() : installLabel();
             $('fx-install-hint').textContent = hint;
             $('fx-install-hint').style.display = hint ? '' : 'none';
         }
@@ -802,7 +890,13 @@
         $('fx-push-btn').addEventListener('click', function () {
             if (push.state === 'on') disablePush(); else enablePush();
         });
-        $('fx-install-btn').addEventListener('click', install);
+        $('fx-install-btn').addEventListener('click', function () {
+            if (installPrompt) { install(); return; }
+            if (window.BlastOnboarding) {
+                closePanel();
+                window.BlastOnboarding.showInstall();
+            }
+        });
         $('fx-close').addEventListener('click', closePanel);
         $('effects-panel').addEventListener('click', function (e) {
             if (e.target === $('effects-panel')) closePanel();
@@ -876,6 +970,17 @@
         canInstall: function () { return !!installPrompt; },
         installed: function () { return installed; },
         installLabel: installLabel,
+        appInstalled: appInstalled,
+        isAndroid: isAndroid,
+        isMobile: isMobile,
+        isBrave: isBrave,
+        inAppBrowser: inAppBrowser,
+        iosBrowser: iosBrowser,
+        browserName: browserName,
+        cameraPermission: cameraPermission,
+        buzz: buzz,
+        keepAwake: requestWakeLock,
+        wakeLockActive: function () { return !!wakeLock && !wakeLock.released; },
         onChange: function (fn) { listeners.push(fn); },
         // Pour les tests : rejouer une commande sans passer par le serveur
         _light: handleLight,

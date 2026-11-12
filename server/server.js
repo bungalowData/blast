@@ -560,21 +560,49 @@ io.on('connection', (socket) => {
     });
 
     // ── Chat : rejoindre avec un pseudo ──
-    socket.on('join', ({ nickname }) => {
+    // `device` identifie le téléphone (pas la personne) : un même téléphone
+    // peut reprendre son pseudo à une autre de ses connexions, typiquement
+    // l'onglet du navigateur resté ouvert quand on passe dans l'app installée,
+    // ou une connexion pas encore expirée après une coupure réseau.
+    socket.on('join', (data) => {
+        const { nickname, device } = data && typeof data === 'object' ? data : {};
         if (!nickname || typeof nickname !== 'string') return;
 
         const trimmed = nickname.trim().slice(0, 32);
         if (!trimmed) return;
 
-        // Vérifier si le pseudo est déjà pris
-        const taken = [...connectedUsers.values()].some(
-            n => n.toLowerCase() === trimmed.toLowerCase()
-        );
+        socket.data.device = typeof device === 'string' && /^[\w-]{8,64}$/.test(device) ? device : null;
 
-        if (taken) {
-            socket.emit('nickname_taken');
+        // Qui porte déjà ce pseudo ?
+        const lower = trimmed.toLowerCase();
+        let holderId = null;
+        for (const [id, n] of connectedUsers) {
+            if (n.toLowerCase() === lower) { holderId = id; break; }
+        }
+
+        // Ce socket le porte déjà (nouvelle demande, même pseudo) : rien à faire
+        if (holderId === socket.id) {
+            connectedUsers.set(socket.id, trimmed);
+            socket.emit('join_success');
             return;
         }
+
+        let takeover = false;
+        if (holderId) {
+            const holder = io.sockets.sockets.get(holderId);
+            const sameDevice = holder && socket.data.device && holder.data.device === socket.data.device;
+            if (holder && !sameDevice) {
+                socket.emit('nickname_taken');
+                return;
+            }
+            // Même téléphone (ou connexion fantôme) : il reprend son pseudo
+            connectedUsers.delete(holderId);
+            if (holder) holder.emit('session_replaced');
+            takeover = true;
+        }
+
+        // Un socket qui change de pseudo libère l'ancien
+        const previous = connectedUsers.get(socket.id);
 
         // Enregistrer l'utilisateur
         connectedUsers.set(socket.id, trimmed);
@@ -583,13 +611,14 @@ io.on('connection', (socket) => {
         // Envoyer l'historique au nouvel arrivant
         socket.emit('history', messageHistory);
 
-        // Annoncer l'arrivée aux autres
-        const sysMsg = `${trimmed} a rejoint le chat`;
-        io.emit('system', sysMsg);
+        // Annoncer l'arrivée aux autres (pas pour une simple reprise)
+        if (!takeover) {
+            io.emit('system', previous ? `${previous} s'appelle maintenant ${trimmed}` : `${trimmed} a rejoint le chat`);
+        }
 
         // Mettre à jour le compteur
         broadcastUserCount();
-        console.log(`${trimmed} a rejoint (${connectedUsers.size} en ligne)`);
+        console.log(`${trimmed} a ${takeover ? 'repris son pseudo' : 'rejoint'} (${connectedUsers.size} en ligne)`);
     });
 
     // ── Chat : nouveau message ──

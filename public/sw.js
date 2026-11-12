@@ -14,13 +14,16 @@
 
 importScripts('./js/blast-config.js');
 
-const CACHE = 'blast-v1';
+const CACHE = 'blast-v2';
 const SHELL = [
     './index_new.html',
     './chat.html',
     './tweet.html',
     './js/blast-config.js',
     './js/blast-phone.js',
+    './js/blast-textes.js',
+    './js/blast-onboarding.js',
+    './css/blast-onboarding.css',
     './manifest.webmanifest',
     './icons/icon-192.png',
     './icons/icon-512.png',

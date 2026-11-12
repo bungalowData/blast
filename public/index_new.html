@@ -19,7 +19,10 @@
          ailleurs, Barlow Condensed en est la plus proche des polices libres. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@800&family=EB+Garamond:ital@0;1&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@800&family=EB+Garamond:ital@0;1&family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Accueil : installation, pseudo, réglages, tutoriel -->
+    <link rel="stylesheet" href="./css/blast-onboarding.css">
     <style>
         body, html {
             margin: 0;
@@ -337,18 +340,28 @@
         </div>
     </div>
 
+    <!-- Accueil (textes : js/blast-textes.js). Visible dès le chargement, le
+         temps de savoir s'il faut le montrer : pas d'éclair du chat derrière. -->
+    <div id="onboarding" class="on">
+        <div class="ob-screen"><div class="ob-body"><div class="ob-logo">BLAST</div></div></div>
+    </div>
+
     <!-- Lumière (écran coloré) : tout au-dessus -->
     <div id="light-overlay"></div>
     <button id="torch-rearm">💡 Réactiver la lampe</button>
 
     <script src="./js/blast-config.js"></script>
+    <script src="./js/blast-textes.js"></script>
     <script src="./js/blast-phone.js"></script>
+    <script src="./js/blast-onboarding.js"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script>
 
+        BlastPhone.init();
+        BlastOnboarding.start();
+
         const socket = io(window.BLAST_SERVER);
         BlastPhone.attach(socket);
-        BlastPhone.init();
 
         socket.on('connect', () => {
             console.log('Socket connecté (sondage)');
