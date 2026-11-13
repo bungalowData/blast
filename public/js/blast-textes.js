@@ -79,9 +79,11 @@ self.BLAST_TEXTES = {
         lien: `Ça ne marche pas ? Continuer ici`,
     },
 
-    // iPhone : trois étapes illustrées, puis « ouvre l'app »
+    // iPhone : les trois étapes illustrées sur une seule page, puis « ouvre l'app »
     iphone: {
-        etape: `Étape {n} sur 3`,
+        titre: `Installe BLAST en 3 gestes`,
+        // Laisser vide (``) pour ne rien afficher sous le titre
+        texte: `Lis les trois étapes avant de commencer : le menu Partager recouvre cette page.`,
         etape1: {
             titre: `Touche le bouton Partager`,
             texte: `En bas de l'écran, au milieu.`,

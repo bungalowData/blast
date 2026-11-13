@@ -48,7 +48,7 @@ refuser ses commandes par le nouveau serveur.
 
 1. **Sur le site, dans le navigateur d'un téléphone** : on pousse à installer l'app, et rien
    d'autre. Android : le bouton déclenche l'installation du navigateur (ou explique son menu).
-   iPhone : trois étapes illustrées (Partager → « Sur l'écran d'accueil » → Ajouter), puis
+   iPhone : trois étapes illustrées sur une seule page (Partager → « Sur l'écran d'accueil » → Ajouter), puis
    « ouvre BLAST depuis ton écran d'accueil ». Navigateur intégré (Instagram…) ou Brave sur
    iPhone : « ouvre ce lien dans Safari / Chrome ».
 2. **Premier lancement de l'app** : pseudo, puis un réglage par écran (notifications, lampe,

@@ -214,22 +214,9 @@
     function pictoPartager() {
         var b = BP.iosBrowser();
         var host = h('div', { class: 'ob-addr', text: location.host });
-        if (b === 'safari26') {
-            return [
-                h('div', { class: 'ob-bar' }, icon('left'), host, icon('dots', 'ob-hl')),
-                h('div', { class: 'ob-arrow ob-arrow-right', text: '↓' }),
-            ].reverse();
-        }
-        if (b === 'autre') {
-            return [
-                h('div', { class: 'ob-bar' }, host, icon('share', 'ob-hl')),
-                h('div', { class: 'ob-arrow ob-arrow-right', text: '↑' }),
-            ];
-        }
-        return [
-            h('div', { class: 'ob-arrow', text: '↓' }),
-            h('div', { class: 'ob-bar' }, icon('left'), icon('right'), icon('share', 'ob-hl'), icon('book'), icon('tabs')),
-        ];
+        if (b === 'safari26') return h('div', { class: 'ob-bar' }, icon('left'), host, icon('dots', 'ob-hl'));
+        if (b === 'autre') return h('div', { class: 'ob-bar' }, host, icon('share', 'ob-hl'));
+        return h('div', { class: 'ob-bar' }, icon('left'), icon('right'), icon('share', 'ob-hl'), icon('book'), icon('tabs'));
     }
 
     // iPhone, étape 2 : la liste du menu Partager
@@ -365,24 +352,30 @@
             });
         },
 
-        iphone: function (n) {
-            var e = 'iphone.etape' + n;
-            var texte = txt(e + '.texte');
-            if (n === 1) {
-                var b = BP.iosBrowser();
-                if (b === 'safari26') texte = txt('iphone.etape1.texteIOS26');
-                else if (b === 'autre') texte = txt('iphone.etape1.texteAutre');
-            }
+        // Les trois étapes sur une seule page : le menu Partager d'iOS recouvre
+        // le site, autant tout avoir lu avant de l'ouvrir.
+        iphone: function () {
+            var b = BP.iosBrowser();
+            var texte1 = b === 'safari26' ? txt('iphone.etape1.texteIOS26')
+                : b === 'autre' ? txt('iphone.etape1.texteAutre')
+                : txt('iphone.etape1.texte');
+            var etapes = [
+                { titre: txt('iphone.etape1.titre'), texte: texte1, picto: pictoPartager() },
+                { titre: txt('iphone.etape2.titre'), texte: txt('iphone.etape2.texte'), picto: pictoListe() },
+                { titre: txt('iphone.etape3.titre'), texte: txt('iphone.etape3.texte'), picto: pictoAjouter() },
+            ];
             screen({
-                retour: n > 1 ? function () { go('iphone', n - 1); }
-                    : mode === 'installer' ? null : function () { go('accueil'); },
-                etape: fill(txt('iphone.etape'), { n: n }),
-                titre: txt(e + '.titre'),
-                texte: fill(texte),
-                picto: n === 1 ? pictoPartager() : n === 2 ? pictoListe() : pictoAjouter(),
-                boutons: [n < 3
-                    ? { label: txt('suivant'), run: function () { go('iphone', n + 1); } }
-                    : { label: txt('iphone.boutonFin'), run: function () { markInstalled(); go('iphoneOk'); } }],
+                retour: mode === 'installer' ? null : function () { go('accueil'); },
+                titre: txt('iphone.titre'),
+                texte: fill(txt('iphone.texte')),
+                contenu: h('ol', { class: 'ob-steps' }, etapes.map(function (e, i) {
+                    return h('li', { class: 'ob-step' },
+                        h('span', { class: 'ob-step-n', 'aria-hidden': 'true', text: String(i + 1) }),
+                        h('div', { class: 'ob-step-t', text: fill(e.titre) }),
+                        e.texte ? h('p', { class: 'ob-step-x', text: fill(e.texte) }) : null,
+                        h('div', { class: 'ob-picto', 'aria-hidden': 'true' }, e.picto));
+                })),
+                boutons: [{ label: txt('iphone.boutonFin'), run: function () { markInstalled(); go('iphoneOk'); } }],
                 lien: { label: txt('iphone.lien'), run: continueHere },
             });
         },
@@ -393,7 +386,7 @@
                 titre: txt('iphoneOk.titre'),
                 texte: fill(txt('iphoneOk.texte')),
                 picto: pictoHome(),
-                boutons: [{ label: txt('iphoneOk.bouton'), style: 'secondary', run: function () { go('iphone', 1); } }],
+                boutons: [{ label: txt('iphoneOk.bouton'), style: 'secondary', run: function () { go('iphone'); } }],
                 lien: { label: txt('iphoneOk.lien'), run: continueHere },
             });
         },
@@ -635,7 +628,7 @@
 
     function startInstall() {
         st.androidRefus = false;
-        if (BP.isIOS()) go('iphone', 1); else go('android');
+        if (BP.isIOS()) go('iphone'); else go('android');
     }
 
     function installAndroid() {
