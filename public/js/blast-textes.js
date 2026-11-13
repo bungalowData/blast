@@ -180,14 +180,22 @@ self.BLAST_TEXTES = {
         titre: `Deviens une lumière du spectacle`,
         texte: `La régie allumera la lampe de ton téléphone avec la salle.\nTon téléphone va demander l'accès à la caméra : rien n'est filmé, et elle reste fermée tant que la régie n'en a pas besoin.`,
         bouton: `Activer la lampe`,
-        aide: `Choisis « Pendant la visite du site », pas « Cette fois-ci uniquement ».`,
+        aide: `Choisis « Pendant la visite du site », pas « Cette fois-ci uniquement ».\nSi ton téléphone demande ensuite si {navigateur} peut prendre des photos, réponds « Lorsque vous utilisez l'appli ».`,
         enCours: `Recherche de la lampe…`,
         ok: `Lampe prête ✓ Elle vient de clignoter.`,
         sansLampe: `Pas de lampe utilisable sur ce téléphone : c'est l'écran qui s'allumera.`,
+        // La fenêtre de demande s'est fermée sans réponse : on peut simplement réessayer
+        fermee: `La demande s'est fermée sans réponse. Touche de nouveau « Activer la lampe », puis « Pendant la visite du site ».`,
         bloqueTitre: `La lampe est bloquée`,
-        bloqueAndroid: `L'accès à la caméra a été refusé. Pour le rétablir : ouvre Chrome › ⋮ › Paramètres › Paramètres des sites › Appareil photo › {site} › Autoriser. Puis reviens ici.`,
+        // Le site est bloqué dans Chrome (un « Ne pas autoriser » donné une fois)
+        bloqueAndroid: `BLAST n'a plus le droit d'utiliser la caméra. Pour le lui rendre :\n1. Ouvre l'application Chrome (pas BLAST).\n2. Touche ⋮ › Paramètres › Paramètres des sites › Appareil photo.\n3. Dans la liste « Bloqués », touche {site}, puis choisis « Autoriser ».\nSi {site} n'apparaît pas : Paramètres des sites › Tous les sites › {site} › Effacer et réinitialiser (BLAST te redemandera ton pseudo).\nReviens ensuite ici.`,
+        bloqueSamsung: `BLAST n'a plus le droit d'utiliser la caméra. Pour le lui rendre :\n1. Ouvre l'application Samsung Internet (pas BLAST).\n2. Touche ≡ › Paramètres, puis cherche « Autorisations des sites » › Appareil photo.\n3. Touche {site}, puis autorise-le.\nReviens ensuite ici.`,
+        // Le téléphone interdit l'appareil photo au navigateur lui-même
+        bloqueSysteme: `Ton téléphone interdit l'appareil photo à {navigateur}. Pour le rétablir :\n1. Ouvre les Paramètres du téléphone › Applications › {navigateur} › Autorisations › Appareil photo.\n2. Choisis « Autoriser seulement si l'appli est en cours d'utilisation ».\nVérifie aussi, dans les réglages rapides (glisse depuis le haut de l'écran), que « Accès à l'appareil photo » est activé.\nReviens ensuite ici.`,
         bloqueIPhone: `L'accès à la caméra a été refusé. Ferme BLAST, rouvre-le, puis touche « Autoriser » quand ton iPhone le demande.`,
         toujoursBloque: `Toujours bloquée : vérifie le réglage, ou passe cette étape.`,
+        // Petite ligne grise sous les explications, utile pour signaler un souci
+        detail: `Détail : {erreur}`,
         boutonReessayer: `J'ai changé le réglage`,
         lien: `Passer, l'écran suffira`,
     },

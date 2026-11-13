@@ -87,6 +87,8 @@
         stream: null,
         track: null,
         lit: false,        // dernier état demandé à la lampe
+        refus: null,       // après un refus : 'site' | 'systeme' | 'ferme' (voir refusalKind)
+        erreur: '',        // le détail technique du dernier échec
     };
 
     var serverArmed = false;          // la régie a armé les flashs
@@ -287,6 +289,8 @@
                 return torch.state;
             }
             store.set('blast_torch', 'on');
+            torch.refus = null;
+            torch.erreur = '';
             rememberDevice(cam.track);
             return (test ? testBlink(cam.track) : Promise.resolve()).then(function () {
                 if (serverArmed && document.visibilityState === 'visible') {
@@ -300,9 +304,41 @@
             });
         }).catch(function (e) {
             console.warn('Lampe torche indisponible :', e);
-            setTorchState(isDenied(e) ? 'denied' : 'unavailable');
-            return torch.state;
+            torch.erreur = ((e && e.name) || 'Erreur') + (e && e.message ? ' : ' + e.message : '');
+            if (!isDenied(e)) {
+                torch.refus = null;
+                setTorchState('unavailable');
+                return torch.state;
+            }
+            return cameraPermission().then(function (perm) {
+                torch.erreur += ' · autorisation du site : ' + perm;
+                torch.refus = refusalKind(e, perm);
+                // Fenêtre fermée sans réponse : rien n'est bloqué, on peut redemander
+                setTorchState(torch.refus === 'ferme' ? 'off' : 'denied');
+                return torch.state;
+            });
         });
+    }
+
+    // Pourquoi la caméra a été refusée. Trois cas, trois remèdes :
+    //  site    : le site est bloqué dans les réglages du navigateur
+    //  systeme : le téléphone interdit l'appareil photo au navigateur lui-même
+    //            (autorisation Android de Chrome, ou accès coupé dans les
+    //            réglages rapides) ; Chrome le dit « Permission denied by system »
+    //  ferme   : la fenêtre de demande s'est fermée sans réponse
+    function refusalKind(e, perm) {
+        var msg = String((e && e.message) || '');
+        if (perm === 'denied') return 'site';
+        if (/system/i.test(msg) || perm === 'granted') return 'systeme';
+        if (/dismiss/i.test(msg)) return 'ferme';
+        return 'site';
+    }
+
+    // Retour des réglages : le site n'est plus bloqué, on repart de zéro
+    function clearTorchRefusal() {
+        if (torch.state !== 'denied') return;
+        torch.refus = null;
+        setTorchState('off');
     }
 
     function disableTorch() {
@@ -820,6 +856,14 @@
         denied: 'Accès à la caméra refusé : autorise-le dans les réglages du navigateur',
     };
 
+    function torchLabel() {
+        if (torch.state === 'denied' && torch.refus === 'systeme') {
+            return "Le téléphone interdit l'appareil photo au navigateur : autorise-le dans les paramètres " +
+                'du téléphone (Applications › ' + browserName() + ' › Autorisations).';
+        }
+        return TORCH_LABELS[torch.state] || '';
+    }
+
     var PUSH_LABELS = {
         off: 'Désactivées',
         pending: 'Activation…',
@@ -841,7 +885,7 @@
     function renderPanel() {
         var panel = $('effects-panel');
         if (panel) {
-            $('fx-torch-status').textContent = TORCH_LABELS[torch.state] || '';
+            $('fx-torch-status').textContent = torchLabel();
             var tb = $('fx-torch-btn');
             tb.textContent = torch.state === 'blocked' ? 'Réactiver la lampe'
                 : torchEnabled() ? 'Désactiver' : 'Activer la lampe';
@@ -961,7 +1005,7 @@
         pushState: function () { return push.state; },
         torchSupported: torchSupported,
         pushSupport: pushSupport,
-        torchLabel: function () { return TORCH_LABELS[torch.state] || ''; },
+        torchLabel: torchLabel,
         pushLabel: pushLabel,
         isIOS: isIOS,
         isStandalone: isStandalone,
@@ -978,6 +1022,9 @@
         iosBrowser: iosBrowser,
         browserName: browserName,
         cameraPermission: cameraPermission,
+        torchRefusal: function () { return torch.refus; },
+        torchError: function () { return torch.erreur; },
+        clearTorchRefusal: clearTorchRefusal,
         buzz: buzz,
         keepAwake: requestWakeLock,
         wakeLockActive: function () { return !!wakeLock && !wakeLock.released; },

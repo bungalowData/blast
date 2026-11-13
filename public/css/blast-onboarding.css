@@ -90,6 +90,7 @@
 .ob-status.ok { color: #57f287; }
 .ob-status.ko { color: #faa61a; }
 .ob-question { margin: 0; font-size: 17px; color: #fff; }
+.ob-detail { margin: 0; font-size: 12px; line-height: 1.4; color: #6d6f78; word-break: break-word; }
 .ob-error { margin: -4px 0 0; font-size: 14px; color: #f23f43; }
 
 .ob-input {

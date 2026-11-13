@@ -130,7 +130,8 @@
             o.points ? h('ul', { class: 'ob-points' }, o.points.map(function (p) { return h('li', { text: p }); })) : null,
             o.contenu || null,
             o.statut ? h('p', { class: 'ob-status ' + (o.statutClasse || ''), role: 'status', text: o.statut }) : null,
-            o.picto ? h('div', { class: 'ob-picto', 'aria-hidden': 'true' }, o.picto) : null);
+            o.picto ? h('div', { class: 'ob-picto', 'aria-hidden': 'true' }, o.picto) : null,
+            o.detail ? h('p', { class: 'ob-detail', text: o.detail }) : null);
 
         var actions = h('div', { class: 'ob-actions' },
             o.dots ? h('div', { class: 'ob-dots' }, range(o.dots.total).map(function (i) {
@@ -467,16 +468,25 @@
                 titre: txt('lampe.titre'),
                 texte: txt('lampe.texte'),
             };
+            var refus = BP.torchRefusal();
             var refusee = s === 'denied' || (s === 'off' && st.lampeRefuseeAvant);
             if (refusee) {
+                // Le remède dépend de qui bloque : le téléphone, ou le navigateur
+                var cle = s === 'denied' && refus === 'systeme' ? 'lampe.bloqueSysteme'
+                    : BP.isIOS() ? 'lampe.bloqueIPhone'
+                    : BP.browserName() === 'Samsung Internet' ? 'lampe.bloqueSamsung'
+                    : 'lampe.bloqueAndroid';
                 o.titre = txt('lampe.bloqueTitre');
-                o.texte = fill(BP.isIOS() ? txt('lampe.bloqueIPhone') : txt('lampe.bloqueAndroid'));
+                o.texte = fill(txt(cle));
                 o.statut = st.lampeEssais > 0 ? txt('lampe.toujoursBloque') : '';
                 o.statutClasse = 'ko';
+                o.detail = BP.torchError() ? fill(txt('lampe.detail'), { erreur: BP.torchError() }) : '';
                 o.boutons = [{ label: txt('lampe.boutonReessayer'), run: activerLampe }];
                 o.lien = { label: txt('lampe.lien'), run: next.run };
             } else if (s === 'off' || s === 'pending') {
-                o.statut = s === 'pending' ? txt('lampe.enCours') : txt('lampe.aide');
+                var fermee = s === 'off' && refus === 'ferme';
+                o.statut = fill(s === 'pending' ? txt('lampe.enCours') : fermee ? txt('lampe.fermee') : txt('lampe.aide'));
+                o.statutClasse = fermee ? 'ko' : '';
                 o.picto = pictoCamera();
                 o.boutons = [{ label: txt('lampe.bouton'), disabled: s === 'pending', run: activerLampe }];
                 o.lien = { label: txt('plusTard'), run: next.run };
@@ -721,9 +731,23 @@
         if (BP.torchState() === 'denied' || st.lampeRefuseeAvant) st.lampeEssais++;
         BP.enableTorch({ test: true }).then(function (s) {
             if (s === 'standby' || s === 'armed') { st.lampeEclair = true; st.lampeRefuseeAvant = false; }
+            if (s === 'off') st.lampeRefuseeAvant = false;
             if (current && current.id === 'lampe') render();
         });
     }
+
+    // Retour des réglages du téléphone sur l'écran de la lampe : si le site
+    // n'est plus bloqué, on repropose « Activer la lampe » sans attendre.
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState !== 'visible' || !current || current.id !== 'lampe') return;
+        BP.cameraPermission().then(function (p) {
+            if (p === 'denied') return;
+            st.lampeRefuseeAvant = false;
+            st.lampeEssais = 0;
+            if (BP.torchRefusal() === 'site') BP.clearTorchRefusal();
+            if (current && current.id === 'lampe') render();
+        });
+    });
 
     function testSound() {
         if (chatApi) {
